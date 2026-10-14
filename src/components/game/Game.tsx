@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import {
   COLS,
@@ -570,7 +570,7 @@ export function Game() {
   );
 }
 
-function ActionBtn({ tone, children, ...p }: { tone: "primary" | "warn" | "muted"; children: ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+function ActionBtn({ tone, children, ...p }: { tone: "primary" | "warn" | "muted"; children: ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"
