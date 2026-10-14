@@ -1,4 +1,4 @@
-import { useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import {
   COLS,
@@ -386,7 +386,14 @@ function RulesSheet() {
 }
 
 export function Game() {
-  const [s, setS] = useState<GameState>(() => newGame());
+  const [game, setGame] = useState<GameState | null>(null);
+  useEffect(() => setGame(newGame()), []);
+  if (!game) return <div className="flex min-h-screen items-center justify-center text-research glow">Booting bunker…</div>;
+  return <GameView initial={game} />;
+}
+
+function GameView({ initial }: { initial: GameState }) {
+  const [s, setS] = useState<GameState>(initial);
   const [history, setHistory] = useState<GameState[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [pending, setPending] = useState<Cell | null>(null);
