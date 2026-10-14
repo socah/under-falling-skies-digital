@@ -583,7 +583,7 @@ function ActionBtn({ tone, children, ...p }: { tone: "primary" | "warn" | "muted
       type="button"
       {...p}
       className={cn(
-        "flex h-11 flex-1 items-center justify-center gap-2 rounded-sm border font-display text-sm font-bold uppercase tracking-wider transition-all disabled:opacity-40",
+        "flex h-11 flex-1 items-center justify-center gap-2 rounded-sm border font-display text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-40",
         tone === "primary" && "border-research bg-research/15 text-research box-glow",
         tone === "warn" && "animate-pulse border-warn bg-warn/20 text-warn box-glow",
         tone === "muted" && "border-border text-muted-foreground",
