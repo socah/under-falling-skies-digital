@@ -271,7 +271,6 @@ export function resolveRoom(prev: GameState, roomId: string, use: boolean): Game
   const s = clone(prev);
   const r = ROOMS.find((x) => x.id === roomId)!;
   const { dice, robots, full } = roomContents(s, r);
-  const freshDice = dice.length > 0;
   const finish = () => {
     for (const d of dice) d.resolved = true;
   };
@@ -279,13 +278,6 @@ export function resolveRoom(prev: GameState, roomId: string, use: boolean): Game
     if (use && !full) s.log.push(`${roomId}: not every space filled — no effect.`);
     if (use && full && s.energy < r.cost) s.log.push(`${roomId}: not enough energy.`);
     finish();
-    // robots not used keep their value
-    if (!freshDice) for (const rb of robots) rb.used = true, rb.value = rb.value; // mark as considered
-    if (!freshDice) for (const rb of robots) rb.used = false;
-    if (!freshDice && !use) {
-      // allow skipping robot-only rooms permanently this round
-      for (const rb of robots) rb.fresh = rb.fresh;
-    }
     return s;
   }
   s.energy -= r.cost;
@@ -406,7 +398,7 @@ export function endRound(prev: GameState, rng: Rng = Math.random): GameState {
       s.research = Math.max(0, s.research - eff.n);
       s.log.push(`Mothership: research set back ${eff.n}.`);
     } else if (eff.t === "red") {
-      const red = s.ships.find((sh) => sh.color === "red" && sh.destroyed && sh.pos === null && !(sh as Ship & { gone?: boolean }).gone);
+      const red = s.ships.find((sh) => sh.color === "red" && sh.destroyed && sh.pos === null);
       if (red) {
         red.destroyed = false;
         s.log.push("Mothership: a red ship joins the fleet.");
