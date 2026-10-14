@@ -171,7 +171,7 @@ export function moveColumn(s: GameState, col: number, n: number) {
       continue;
     }
     sh.pos = target;
-    const icon = SKY[target][col];
+    const icon = SKY[target]![col];
     if (!icon) continue;
     if (icon.t === "L" || icon.t === "R") {
       const nc = col + (icon.t === "L" ? -1 : 1);
@@ -240,8 +240,8 @@ export function roomContents(s: GameState, r: Room) {
 export function researchAdvance(pos: number, value: number) {
   let p = pos;
   let sum = 0;
-  while (p + 1 < RESEARCH.length && sum + RESEARCH[p + 1] <= value) {
-    sum += RESEARCH[p + 1];
+  while (p + 1 < RESEARCH.length && sum + RESEARCH[p + 1]! <= value) {
+    sum += RESEARCH[p + 1]!;
     p++;
   }
   return p;
@@ -251,7 +251,7 @@ export function shootDown(s: GameState, value: number) {
   let n = 0;
   for (const sh of s.ships) {
     if (sh.pos === null || sh.pos < 0 || sh.pos >= DAMAGE_ROW) continue;
-    const icon = SKY[sh.pos][sh.col];
+    const icon = SKY[sh.pos]![sh.col];
     if (icon?.t === "exp" && icon.v <= value) {
       sh.pos = null;
       if (sh.color === "red") sh.destroyed = true;
@@ -379,10 +379,10 @@ export function spawnShips(s: GameState) {
     if (free.length === 0) break;
     const empty = free.filter((c) => !s.ships.some((o) => o.col === c && o.pos !== null));
     let col: number;
-    if (empty.length) col = empty[0];
+    if (empty.length) col = empty[0]!;
     else {
       const gap = (c: number) => Math.min(...s.ships.filter((o) => o.col === c && o.pos !== null).map((o) => o.pos!)) - start;
-      col = free.reduce((best, c) => (gap(c) > gap(best) ? c : best), free[0]);
+      col = free.reduce((best, c) => (gap(c) > gap(best) ? c : best), free[0]!);
     }
     sh.col = col;
     sh.pos = start;
@@ -411,9 +411,9 @@ export function endRound(prev: GameState, rng: Rng = Math.random): GameState {
       }
     }
   }
-  if (s.phase === "lost") return s;
+  if ((s.phase as string) === "lost") return s;
   advanceMothership(s);
-  if (s.phase === "lost") return s;
+  if ((s.phase as string) === "lost") return s;
   spawnShips(s);
   for (const rb of s.robots) {
     rb.used = false;

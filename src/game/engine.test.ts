@@ -26,14 +26,14 @@ describe("dice placement", () => {
 
   it("ships in the column descend by the die value", () => {
     let s = game();
-    s.dice[0].value = 4;
+    s.dice[0]!.value = 4;
     s = placeDie(s, 0, [1, 2]); // fighter room, no ship reduction
     expect(s.ships.find((x) => x.id === 2)!.pos).toBe(3);
   });
 
   it("dig room makes ships move one space less", () => {
     let s = game();
-    s.dice[0].value = 1;
+    s.dice[0]!.value = 1;
     s = placeDie(s, 0, [0, 0]);
     expect(s.ships.find((x) => x.id === 0)!.pos).toBe(-1);
   });
@@ -56,8 +56,8 @@ describe("rooms", () => {
   it("energy is capped at 7", () => {
     let s = game();
     s.energy = 6;
-    s.dice[0].value = 6;
-    s.dice[1].value = 6;
+    s.dice[0]!.value = 6;
+    s.dice[1]!.value = 6;
     s = placeDie(s, 0, [2, 1]);
     s = placeDie(s, 1, [2, 2]);
     s = resolveRoom(s, "R2b", true);
@@ -73,15 +73,15 @@ describe("rooms", () => {
 
   it("fighters shoot ships on explosions with number <= value", () => {
     const s = game();
-    s.ships[1].pos = 2; // column 1, row 2 has explosion 1
-    s.ships[0].pos = 3; // column 0, row 3 has explosion 2
+    s.ships[1]!.pos = 2; // column 1, row 2 has explosion 1
+    s.ships[0]!.pos = 3; // column 0, row 3 has explosion 2
     expect(shootDown(s, 1)).toBe(1);
-    expect(s.ships[0].pos).toBe(3);
+    expect(s.ships[0]!.pos).toBe(3);
   });
 
   it("excavator costs 1 energy and needs value >= distance", () => {
     let s = game();
-    s.dice[0].value = 2;
+    s.dice[0]!.value = 2;
     s = placeDie(s, 0, [3, 3]); // route distance 2
     s = resolveDig(s, 0, true);
     expect(s.excavator).toBe(2);
@@ -92,17 +92,17 @@ describe("rooms", () => {
 describe("damage and end", () => {
   it("a ship reaching the base deals 1 damage and returns", () => {
     let s = game();
-    s.ships[4].pos = 13;
-    s.dice[0].value = 3;
+    s.ships[4]!.pos = 13;
+    s.dice[0]!.value = 3;
     s = placeDie(s, 0, [1, 4]);
     expect(s.damage).toBe(1);
-    expect(s.ships[4].pos).toBe(null);
+    expect(s.ships[4]!.pos).toBe(null);
   });
 
   it("5 damage loses the game", () => {
     const s = game();
     s.damage = 4;
-    s.ships[4].pos = 14;
+    s.ships[4]!.pos = 14;
     const r = placeDie(s, 0, [1, 4]);
     expect(r.phase).toBe("lost");
   });

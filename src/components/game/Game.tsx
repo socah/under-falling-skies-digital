@@ -94,7 +94,7 @@ function EnemyShip({ red, ghost }: { red?: boolean; ghost?: boolean }) {
 }
 
 function SkyGlyph({ r, c }: { r: number; c: number }) {
-  const icon = SKY[r][c];
+  const icon = SKY[r]![c];
   if (!icon) return <span className="size-1 rounded-full bg-foreground/15" />;
   if (icon.t === "exp")
     return (
@@ -215,7 +215,7 @@ function Base({
   pending: Cell | null;
   activeRooms: Set<string>;
 }) {
-  const exc = ROUTE[s.excavator];
+  const exc = ROUTE[s.excavator]!;
   const renderSlot = (cell: Cell, inRoom: boolean) => {
     const die = s.dice.find((d) => d.cell && d.cell[0] === cell[0] && d.cell[1] === cell[1]);
     const robot = s.robots.find((r) => r.cell[0] === cell[0] && r.cell[1] === cell[1]);
@@ -254,7 +254,7 @@ function Base({
         {ROOMS.map((r) => {
           const k = KIND[r.kind];
           const usable = roomUsable(s, r);
-          const [row, c0] = r.cells[0];
+          const [row, c0] = r.cells[0]!;
           return (
             <div
               key={r.id}
