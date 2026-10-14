@@ -196,7 +196,6 @@ export function placeDie(prev: GameState, dieId: number, cell: [number, number])
   if (s.phase !== "place") return s;
   const left = s.dice.filter((d) => !d.cell);
   if (die.color === "white" && left.length > 0) s.needsReroll = true;
-  if (left.length === 0) s.phase = "resolve";
   return s;
 }
 
@@ -206,7 +205,14 @@ export function discardDie(prev: GameState, dieId: number): GameState {
   if (!die || die.cell) return s;
   die.cell = [-1, -1];
   die.resolved = true;
-  if (s.dice.every((d) => d.cell)) s.phase = "resolve";
+  return s;
+}
+
+export function startResolve(prev: GameState): GameState {
+  const s = clone(prev);
+  if (s.phase !== "place" || s.dice.some((d) => !d.cell)) return s;
+  s.phase = "resolve";
+  s.log.push("Resolve your rooms in any order.");
   return s;
 }
 
