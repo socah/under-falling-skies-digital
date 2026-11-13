@@ -344,7 +344,7 @@ function Base({
                 reachable ? "border-energy bg-energy text-background" : "border-muted-foreground/50 bg-background text-muted-foreground",
                 reach !== null && !reachable && "opacity-30",
               )}
-              style={{ left: center(c).x, top: center(c).y + CELL_H / 2 - 10 }}
+              style={{ left: center(c).x, top: c[0] * CELL_H + 11 }}
             >
               {i - exc}
             </span>
