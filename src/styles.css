@@ -122,8 +122,6 @@
   --mothership: oklch(0.24 0.05 175);
   --die-grey: oklch(0.35 0.01 220);
   --die-white: oklch(0.95 0.01 180);
-  --art-veil: rgb(0 0 0 / 0.35);
-  --art-veil-base: rgb(0 0 0 / 0.45);
   --font-display: "Chakra Petch", ui-sans-serif, sans-serif;
   --font-mono: "Share Tech Mono", ui-monospace, monospace;
 }
@@ -201,36 +199,3 @@
 @keyframes glow-pulse { 0% { box-shadow: 0 0 0 0 var(--research); } 100% { box-shadow: 0 0 0 8px transparent; } }
 @utility animate-glow-pulse { animation: glow-pulse 0.9s ease-out 2; }
 
-/* Light palette, closer to the printed cards (cream paper, ink, muted colors). */
-.theme-light {
-  --background: oklch(0.95 0.02 85);
-  --foreground: oklch(0.25 0.03 250);
-  --card: oklch(0.98 0.015 85);
-  --card-foreground: oklch(0.25 0.03 250);
-  --popover: oklch(0.98 0.015 85);
-  --popover-foreground: oklch(0.25 0.03 250);
-  --primary: oklch(0.52 0.13 165);
-  --primary-foreground: oklch(0.98 0.01 85);
-  --secondary: oklch(0.9 0.025 85);
-  --secondary-foreground: oklch(0.25 0.03 250);
-  --muted: oklch(0.9 0.02 85);
-  --muted-foreground: oklch(0.45 0.03 250);
-  --accent: oklch(0.55 0.12 230);
-  --accent-foreground: oklch(0.98 0.01 85);
-  --border: oklch(0.72 0.04 80);
-  --input: oklch(0.72 0.04 80);
-  --ring: oklch(0.52 0.13 165);
-  --research: oklch(0.52 0.13 165);
-  --energy: oklch(0.55 0.13 230);
-  --room-energy: oklch(0.7 0.15 85);
-  --room-robot: oklch(0.5 0.14 250);
-  --room-fighter: oklch(0.62 0.18 45);
-  --room-research: oklch(0.55 0.1 185);
-  --sky-top: oklch(0.45 0.08 255);
-  --sky-bottom: oklch(0.8 0.08 60);
-  --mothership: oklch(0.82 0.04 175);
-  --die-grey: oklch(0.55 0.01 220);
-  --die-white: oklch(0.99 0.005 85);
-}
-.theme-light { --art-veil: oklch(0.97 0.02 85 / 0.45); --art-veil-base: oklch(0.93 0.03 75 / 0.72); }
-.theme-light body { background-image: none; }
