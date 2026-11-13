@@ -259,8 +259,23 @@ function Base({
   const excCell = route[exc]!;
 
   return (
-    <section aria-label="Underground base" className="rounded-md border border-border bg-card/60 p-1.5">
-      <div className="relative" style={{ height: BASE_ROWS * CELL_H }}>
+    <section aria-label="Underground base" className="flex rounded-md border border-border bg-card/60">
+      <div className="flex w-8 shrink-0 flex-col-reverse items-stretch gap-0.5 border-r border-border/60 px-1 py-1" aria-label="Research track">
+        {b.research.slice(1).map((v, i) => (
+          <span
+            key={i}
+            className={cn(
+              "flex flex-1 items-center justify-center rounded-[2px] border text-[9px] transition-colors duration-500",
+              i < s.research ? "border-research bg-research text-primary-foreground" : "border-border text-muted-foreground",
+              i === b.research.length - 2 && "border-research",
+            )}
+          >
+            {v}
+          </span>
+        ))}
+        <FlaskConical className="mx-auto size-3 shrink-0 text-research" />
+      </div>
+      <div className="relative flex-1" style={{ height: BASE_ROWS * CELL_H }}>
         {/* dug tunnels (empty, on the route) */}
         {emptyRoute.map((c) =>
           isExcavated(s, c) ? (
@@ -439,21 +454,6 @@ function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) 
         <Stat label="Threat" tone={threat === "LOW" ? "text-research" : "text-threat"}>
           <span className="text-[11px]">{threat}</span>
         </Stat>
-      </div>
-      <div className="mt-1.5 flex items-center gap-0.5" aria-label="Research track">
-        <FlaskConical className="mr-1 size-3 text-research" />
-        {b.research.slice(1).map((v, i) => (
-          <span
-            key={i}
-            className={cn(
-              "flex h-4 flex-1 items-center justify-center rounded-[2px] border text-[9px] transition-colors duration-500",
-              i < s.research ? "border-research bg-research text-primary-foreground" : "border-border text-muted-foreground",
-              i === b.research.length - 2 && "border-research",
-            )}
-          >
-            {v}
-          </span>
-        ))}
       </div>
     </header>
   );
@@ -739,13 +739,16 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
           onDieDown={startDrag}
           draggingId={drag?.dieId ?? null}
         />
-        <ol className="space-y-0.5 px-1 text-[11px] text-muted-foreground" aria-label="Game log">
+        <details className="px-1 text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer select-none uppercase tracking-widest">Action log</summary>
+        <ol className="mt-1 space-y-0.5" aria-label="Game log">
           {s.log.slice(-4).map((l, i) => (
             <li key={`${s.log.length}-${i}`} className={cn(i === Math.min(3, s.log.length - 1) && "text-foreground")}>
               › {l}
             </li>
           ))}
         </ol>
+        </details>
       </main>
 
       {dragDie && (
