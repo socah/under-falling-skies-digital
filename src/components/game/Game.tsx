@@ -804,6 +804,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     const c = ctx(dieId);
     const list = [...c.pre, ...c.post];
     const next = replay(lockBase, list);
+    rolled.current.ids.add(dieId);
     if (!next) {
       toast.error("Can't return that die while the white die depends on it.");
       return;
@@ -824,6 +825,8 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
   const undo = () => {
     if (!placements.length) return;
     const list = placements.slice(0, -1);
+    const last = placements.at(-1);
+    if (last) rolled.current.ids.add(last.dieId);
     setS(replay(lockBase, list) ?? lockBase);
     setPlacements(list);
     setPending(null);
@@ -947,7 +950,6 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
                 // Tumble only on a fresh roll; a die returned from the board just pops back in.
                 if (rolled.current.roll !== s.rollId) rolled.current = { roll: s.rollId, ids: new Set() };
                 const firstShow = !rolled.current.ids.has(d.id);
-                rolled.current.ids.add(d.id);
                 const canPick = placed ? placedIds.has(d.id) : !s.needsReroll;
                 return (
                   <button
