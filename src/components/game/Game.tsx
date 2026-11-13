@@ -633,7 +633,7 @@ function LookPicker() {
   );
 }
 
-function Stat({ label, tone, children, className }: { label: string; tone: string; children: ReactNode; className?: string }) {
+function Stat({ label, tone, children, className }: { label: string; tone: string; children: ReactNode; className?: string | undefined }) {
   return (
     <div className={cn("relative rounded-sm border border-border bg-card/70 px-1.5 py-1", className)}>
       <div className="text-muted-foreground">{label}</div>
