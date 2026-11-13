@@ -9,6 +9,7 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
-- Game rules live as pure functions in `src/game/engine.ts` (per-difficulty board data in `BOARDS` in `src/game/data.ts`, read via `board(state)`) with tests in `engine.test.ts`; UI only calls them — keeps rules testable and separate from rendering.
+- Game rules live as pure functions in `src/game/engine.ts` (board data composed per card setup by `composeBoard` in `src/game/data.ts` — each of the 8 cards is independently easy or hard — read via `board(state)`) with tests in `engine.test.ts`; UI only calls them — keeps rules testable and separate from rendering.
 - New games are created client-side after mount, because random dice during SSR cause hydration mismatches.
 - Dice placements in a round are stored as a list replayed from the last reroll snapshot (`replay`), so dice can be moved/returned before a reroll without special undo logic.
+- Past-game stats are kept per card-setup code in localStorage (`src/game/stats.ts`); no backend, so they stay on the device.

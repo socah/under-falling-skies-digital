@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Lock, Menu, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
-import { BASE_ROWS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, type Difficulty, type MsEffect, type Room, type RoomPart } from "@/game/data";
+import { BASE_ROWS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, CARDS, normalizeSetup, setupLevel, type Difficulty, type MsEffect, type Room, type RoomPart } from "@/game/data";
 import {
   board,
   canPlace,
@@ -29,6 +29,7 @@ import {
 } from "@/game/engine";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { loadStats, recordResult, type SetupStats } from "@/game/stats";
 
 type Placement = { dieId: number; cell: Cell };
 const ROW_H = 22;
@@ -432,7 +433,7 @@ function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) 
         <h1 className="text-sm font-bold tracking-[0.2em] text-research glow">UNDER FALLING SKIES</h1>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">
-            {s.difficulty.toUpperCase()} · RND {s.round}
+            LVL {setupLevel(s.difficulty)} · RND {s.round}
           </span>
           <GameMenu current={s.difficulty} onNew={onNew} />
         </div>
@@ -459,40 +460,87 @@ function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) 
   );
 }
 
+const ALL_E = "e".repeat(CARDS.length);
+const ALL_H = "h".repeat(CARDS.length);
+const pct = (x: SetupStats) => `${Math.round((100 * x.won) / x.played)}%`;
+function setupLabel(code: string) {
+  const l = setupLevel(code);
+  if (l === 0) return "All easy";
+  if (l === CARDS.length) return "All hard";
+  return CARDS.filter((_, i) => code[i] === "h").map((c) => c.name).join(" + ");
+}
+
 function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficulty) => void }) {
   const [open, setOpen] = useState(false);
-  const [d, setD] = useState<Difficulty>(current);
+  const [d, setD] = useState(normalizeSetup(current));
+  const [stats, setStats] = useState<Record<string, SetupStats>>({});
+  const flip = (i: number) => setD((x) => x.slice(0, i) + (x[i] === "h" ? "e" : "h") + x.slice(i + 1));
+  const cur = stats[d];
+  const history = Object.entries(stats).sort((a, b) => setupLevel(a[0]) - setupLevel(b[0]) || b[1].last - a[1].last);
   return (
-    <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (o) setD(current); }}>
+    <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (o) { setD(normalizeSetup(current)); setStats(loadStats()); } }}>
       <SheetTrigger asChild>
         <button type="button" aria-label="Menu" className="rounded-sm border border-border p-1 text-muted-foreground hover:text-foreground">
           <Menu className="size-4" />
         </button>
       </SheetTrigger>
-      <SheetContent side="bottom" className="border-border bg-card font-mono">
+      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto border-border bg-card font-mono">
         <SheetHeader>
           <SheetTitle className="font-display text-research">Menu</SheetTitle>
         </SheetHeader>
-        <div className="space-y-3 px-4 pb-6">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">Difficulty</p>
-          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Difficulty">
-            {(["easy", "hard"] as const).map((x) => (
-              <button
-                key={x}
-                type="button"
-                role="radio"
-                aria-checked={d === x}
-                onClick={() => setD(x)}
-                className={cn("rounded-sm border px-3 py-2 text-left text-sm", d === x ? "border-research bg-research/15 text-research box-glow" : "border-border text-muted-foreground")}
-              >
-                <b className="font-display uppercase">{x}</b>
-                <span className="block text-[11px] opacity-80">{x === "easy" ? "Easy side of every card" : "Star sides · red ships from the start"}</span>
-              </button>
-            ))}
+        <div className="mx-auto w-full max-w-md space-y-3 px-4 pb-6">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Card sides · level {setupLevel(d)}</p>
+            <div className="flex gap-1 text-[11px]">
+              <button type="button" onClick={() => setD(ALL_E)} className={cn("rounded-sm border px-2 py-0.5", d === ALL_E ? "border-research text-research" : "border-border text-muted-foreground")}>All easy</button>
+              <button type="button" onClick={() => setD(ALL_H)} className={cn("rounded-sm border px-2 py-0.5", d === ALL_H ? "border-threat text-threat" : "border-border text-muted-foreground")}>All hard</button>
+            </div>
           </div>
+          <ul className="space-y-1" aria-label="Card sides">
+            {CARDS.map((c, i) => {
+              const hard = d[i] === "h";
+              return (
+                <li key={c.id}>
+                  <button type="button" role="switch" aria-checked={hard} onClick={() => flip(i)}
+                    className={cn("flex w-full items-center gap-2 rounded-sm border px-2 py-1.5 text-left", hard ? "border-threat/70 bg-threat/10" : "border-border")}>
+                    <span className="flex-1">
+                      <b className="block text-xs text-foreground">{c.name}</b>
+                      <span className="block text-[10px] text-muted-foreground">{c.hint}</span>
+                    </span>
+                    <span className={cn("w-14 rounded-sm px-1.5 py-0.5 text-center text-[10px] font-bold uppercase", hard ? "bg-threat text-primary-foreground" : "bg-research/20 text-research")}>
+                      {hard ? "★ Hard" : "Easy"}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-[11px] text-muted-foreground">
+            This setup: {cur ? `${cur.won}/${cur.played} won (${pct(cur)})${cur.bestRounds !== null ? ` · best win in ${cur.bestRounds} rounds` : ""}` : "not played yet"}
+          </p>
           <ActionBtn tone="primary" onClick={() => { onNew(d); setOpen(false); }}>
             Start new game
           </ActionBtn>
+          {history.length > 0 && (
+            <div>
+              <p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground">Past games</p>
+              <table className="w-full text-[11px]">
+                <thead className="text-muted-foreground">
+                  <tr><th className="text-left font-normal">Setup</th><th className="font-normal">Lvl</th><th className="font-normal">Won</th><th className="font-normal">Best</th></tr>
+                </thead>
+                <tbody>
+                  {history.map(([code, x]) => (
+                    <tr key={code} onClick={() => setD(code)} className={cn("cursor-pointer border-t border-border/50", code === d && "text-research")}>
+                      <td className="py-1 pr-2">{setupLabel(code)}</td>
+                      <td className="text-center">{setupLevel(code)}</td>
+                      <td className="text-center">{x.won}/{x.played} · {pct(x)}</td>
+                      <td className="text-center">{x.bestRounds ?? "–"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>
@@ -552,7 +600,7 @@ export function Game() {
     if (game && !game.s) setGame({ s: newGame(), n: 1 });
   }, [game]);
   useEffect(() => {
-    const d: Difficulty = localStorage.getItem("ufs-difficulty") === "hard" ? "hard" : "easy";
+    const d = normalizeSetup(localStorage.getItem("ufs-difficulty") ?? "easy");
     setGame({ s: newGame(Math.random, d), n: 0 });
   }, []);
   if (!game?.s) return <div className="flex min-h-screen items-center justify-center text-research glow">Booting bunker…</div>;
@@ -566,6 +614,12 @@ export function Game() {
 function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficulty) => void }) {
   const [s, setS] = useState<GameState>(initial);
   const [lockBase, setLockBase] = useState<GameState>(initial);
+  const recorded = useRef(false);
+  useEffect(() => {
+    if (recorded.current || (s.phase !== "won" && s.phase !== "lost")) return;
+    recorded.current = true;
+    recordResult(s.difficulty, s.phase === "won", s.round);
+  }, [s.phase, s.difficulty, s.round]);
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [sel, setSel] = useState<number | null>(null);
   const [pending, setPending] = useState<Cell | null>(null);
