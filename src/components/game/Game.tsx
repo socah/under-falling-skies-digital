@@ -116,6 +116,42 @@ function RollingDie({ value, color, delay = 0, className }: { value: number; col
   return <DieFace value={shown} color={color} className={cn(rolling ? "animate-dice-tumble" : "animate-dice-land", className)} />;
 }
 
+/* ---------- effects ---------- */
+/** Remembers the previous value and reports changes as short-lived keyed events. */
+function useChange<T>(value: T, diff: (prev: T, next: T) => number | null, ms = 1200) {
+  const prev = useRef(value);
+  const [ev, setEv] = useState<{ d: number; k: number } | null>(null);
+  useEffect(() => {
+    const d = diff(prev.current, value);
+    prev.current = value;
+    if (d === null || d === 0) return undefined;
+    setEv({ d, k: Date.now() });
+    const t = setTimeout(() => setEv(null), ms);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return ev;
+}
+
+type Boom = { id: number; pos: number; col: number; city: boolean };
+function useBooms(s: GameState) {
+  const prev = useRef(s.ships);
+  const [booms, setBooms] = useState<Boom[]>([]);
+  useEffect(() => {
+    const gone: Boom[] = [];
+    for (const sh of s.ships) {
+      const o = prev.current.find((x) => x.id === sh.id);
+      if (o && o.pos !== null && o.pos >= 0 && sh.pos === null) gone.push({ id: sh.id, pos: o.pos, col: o.col, city: o.pos >= DAMAGE_ROW });
+    }
+    prev.current = s.ships;
+    if (!gone.length) return undefined;
+    setBooms(gone);
+    const t = setTimeout(() => setBooms([]), 900);
+    return () => clearTimeout(t);
+  }, [s.ships]);
+  return booms;
+}
+
 /* ---------- sky ---------- */
 function EnemyShip({ red, ghost }: { red?: boolean; ghost?: boolean }) {
   const { look } = useContext(LookCtx);
@@ -168,6 +204,7 @@ function MsGlyph({ e }: { e: MsEffect | undefined }) {
 
 function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; preview: GameState | null; focusCol: number | null }) {
   const { look } = useContext(LookCtx);
+  const booms = useBooms(s);
   const b = board(s);
   const ghosts = preview
     ? preview.ships.filter((p) => {
@@ -233,6 +270,14 @@ function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; pr
             </div>
           ),
         )}
+        {booms.map((x) => (
+          <div key={`b${x.id}-${x.pos}`}>
+            {!x.city && (
+              <div className="absolute z-20 w-0.5 animate-laser bg-energy shadow-[0_0_8px_var(--energy)]" style={{ left: `calc(${x.col * 20}% + 10% - 1px)`, top: (x.pos + 1.5) * ROW_H, height: (SKY_ROWS - x.pos - 1.5) * ROW_H }} />
+            )}
+            <div className="absolute z-30 size-7 animate-boom rounded-full bg-[radial-gradient(circle,var(--warn),var(--threat)_55%,transparent_70%)]" style={{ top: (x.pos + 1) * ROW_H - 3, left: `calc(${x.col * 20}% + 10% - 14px)` }} />
+          </div>
+        ))}
         {ghosts.map((sh) => (
           <div key={`g${sh.id}`} className="absolute z-20" style={shipStyle(sh.pos!, sh.col)}>
             <EnemyShip red={sh.color === "red"} ghost />
@@ -280,6 +325,7 @@ function Base({
   onDieDown: (dieId: number, e: RPointerEvent) => void;
   draggingId: number | null;
 }) {
+  const rAdv = useChange(s.research, (a, b) => b - a, 1800);
   const { look } = useContext(LookCtx);
   const b = board(s);
   const route = b.route;
@@ -308,6 +354,7 @@ function Base({
             className={cn(
               "flex flex-1 items-center justify-center rounded-[2px] border text-[9px] transition-colors duration-500",
               i < s.research ? "border-research bg-research text-primary-foreground" : "border-border text-muted-foreground",
+              rAdv && rAdv.d > 0 && i >= s.research - rAdv.d && i < s.research && "animate-glow-pulse",
               i === b.research.length - 2 && "border-research",
             )}
           >
@@ -421,7 +468,7 @@ function Base({
                     {!canMove && s.phase === "place" && <Lock className="absolute -right-1 -top-1 size-3 text-muted-foreground" />}
                   </span>
                 )}
-                {robot && <DieFace small value={robot.value} color="robot" className={cn(robot.used && "rotate-45", robot.fresh && "opacity-70")} />}
+                {robot && <DieFace small value={robot.value} color="robot" className={cn("transition-transform duration-500", robot.used && "rotate-45", robot.fresh && "animate-pop opacity-70")} />}
               </div>
             </div>
           );
@@ -446,6 +493,8 @@ function Base({
 function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) {
   const b = board(s);
   const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
+  const dE = useChange(s.energy, (a, b) => b - a);
+  const hit = useChange(s.damage, (a, b) => (b > a ? b - a : null), 500);
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 px-3 py-2 backdrop-blur">
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -458,7 +507,7 @@ function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) 
         </div>
       </div>
       <div className="grid grid-cols-2 gap-1.5 text-[10px] uppercase">
-        <Stat label="Hull" tone="text-threat">
+        <Stat label="Hull" tone="text-threat" className={hit ? "animate-hit" : undefined} key={hit?.k ?? "h"}>
           <span className="flex gap-0.5">
             {Array.from({ length: MAX_DAMAGE }, (_, i) => (
               <span key={i} className={cn("h-2.5 w-1.5 rounded-[1px]", i < MAX_DAMAGE - s.damage ? "bg-research" : "bg-threat/30")} />
@@ -468,6 +517,11 @@ function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) 
         <Stat label="Energy" tone="text-energy">
           {s.energy}/{MAX_ENERGY}
           {gain > 0 && <span className="ml-1.5 text-[11px] text-research">+{gain} this turn</span>}
+          {dE && (
+            <span key={dE.k} className={cn("pointer-events-none absolute right-2 animate-float-up text-base", dE.d > 0 ? "text-energy" : "text-threat")}>
+              {dE.d > 0 ? `+${dE.d}` : dE.d}⚡
+            </span>
+          )}
         </Stat>
       </div>
     </header>
@@ -579,9 +633,9 @@ function LookPicker() {
   );
 }
 
-function Stat({ label, tone, children }: { label: string; tone: string; children: ReactNode }) {
+function Stat({ label, tone, children, className }: { label: string; tone: string; children: ReactNode; className?: string | undefined }) {
   return (
-    <div className="rounded-sm border border-border bg-card/70 px-1.5 py-1">
+    <div className={cn("relative rounded-sm border border-border bg-card/70 px-1.5 py-1", className)}>
       <div className="text-muted-foreground">{label}</div>
       <div className={cn("flex h-5 items-center font-display text-sm font-bold glow", tone)}>{children}</div>
     </div>
