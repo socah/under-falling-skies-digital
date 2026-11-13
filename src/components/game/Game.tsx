@@ -551,7 +551,7 @@ export function Game() {
     const d: Difficulty = localStorage.getItem("ufs-difficulty") === "hard" ? "hard" : "easy";
     setGame({ s: newGame(Math.random, d), n: 0 });
   }, []);
-  if (!game) return <div className="flex min-h-screen items-center justify-center text-research glow">Booting bunker…</div>;
+  if (!game?.s) return <div className="flex min-h-screen items-center justify-center text-research glow">Booting bunker…</div>;
   const onNew = (d: Difficulty) => {
     localStorage.setItem("ufs-difficulty", d);
     setGame((g) => ({ s: newGame(Math.random, d), n: (g?.n ?? 0) + 1 }));
