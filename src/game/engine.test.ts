@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  board,
   canPlace,
+  isExcavated,
+  replay,
   endRound,
   newGame,
   placeDie,
@@ -121,5 +124,48 @@ describe("damage and end", () => {
     s.phase = "resolve";
     s = endRound(s);
     expect(s.phase).toBe("lost");
+  });
+});
+
+describe("excavator limits", () => {
+  it("a die cannot be placed further along the route than its value", () => {
+    const s = game(); // all dice show 3
+    expect(canPlace(s, 0, [3, 1])).toBe("Too far for the excavator"); // distance 4
+    expect(canPlace(s, 0, [3, 2])).toBe(null); // distance 3
+  });
+  it("the dug space becomes usable right away", () => {
+    let s = game();
+    s = placeDie(s, 0, [3, 4]);
+    s = resolveDig(s, 0, true);
+    expect(isExcavated(s, [3, 4])).toBe(true);
+  });
+});
+
+describe("hard side", () => {
+  const hard = () => newGame(fixed(3), "hard");
+  it("starts with two red ships waiting on the mothership", () => {
+    const s = hard();
+    expect(s.ships.filter((x) => x.color === "red" && !x.destroyed && x.pos === null).length).toBe(2);
+  });
+  it("excavator route goes down the tall lab, exits left, then steps back up", () => {
+    const r = board(hard()).route;
+    const i = r.findIndex((c) => c[0] === 4 && c[1] === 4);
+    expect(r.slice(i, i + 4)).toEqual([[4, 4], [5, 4], [5, 3], [4, 3]]);
+  });
+  it("mothership reaching the hard skull row loses", () => {
+    const s = hard();
+    s.mothership = 10;
+    s.phase = "resolve";
+    expect(endRound(s).phase).toBe("lost");
+  });
+});
+
+describe("rearranging dice", () => {
+  it("replaying placements without a die restores its column", () => {
+    const base = game();
+    const s = replay(base, [{ dieId: 0, cell: [1, 2] }])!;
+    expect(s.ships[2]!.pos).toBe(2);
+    const r = replay(base, [])!;
+    expect(r.ships[2]!.pos).toBe(-1);
   });
 });
