@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Lock, Menu, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { BASE_ROWS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, CARDS, normalizeSetup, setupLevel, type Difficulty, type MsEffect, type Room, type RoomPart } from "@/game/data";
@@ -30,6 +30,12 @@ import {
 } from "@/game/engine";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import skyBg from "@/assets/sky-background.jpg";
+import baseBg from "@/assets/base-background.jpg";
+import alienShip from "@/assets/alien-ship.png";
+
+type Look = "illustrated" | "abstract";
+const LookCtx = createContext<{ look: Look; setLook: (l: Look) => void }>({ look: "illustrated", setLook: () => {} });
 import { loadStats, recordResult, type SetupStats } from "@/game/stats";
 
 type Placement = { dieId: number; cell: Cell };
@@ -112,6 +118,18 @@ function RollingDie({ value, color, delay = 0, className }: { value: number; col
 
 /* ---------- sky ---------- */
 function EnemyShip({ red, ghost }: { red?: boolean; ghost?: boolean }) {
+  const { look } = useContext(LookCtx);
+  if (look === "illustrated")
+    return (
+      <img
+        src={alienShip}
+        alt=""
+        width={24}
+        height={24}
+        className={cn("size-6 rotate-180", ghost && "animate-ghost opacity-60")}
+        style={{ filter: `${red ? "hue-rotate(250deg) saturate(2) " : ""}drop-shadow(0 0 3px ${red ? "var(--threat)" : "var(--research)"})` }}
+      />
+    );
   return (
     <svg viewBox="0 0 24 16" className={cn("h-4 w-6", red ? "text-threat" : "text-warn", ghost && "animate-ghost opacity-60")}>
       <path d="M2 3 L12 14 L22 3 L12 7 Z" fill="currentColor" stroke="currentColor" strokeWidth={ghost ? 0 : 1} style={{ filter: "drop-shadow(0 0 3px currentColor)" }} />
@@ -149,6 +167,7 @@ function MsGlyph({ e }: { e: MsEffect | undefined }) {
 }
 
 function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; preview: GameState | null; focusCol: number | null }) {
+  const { look } = useContext(LookCtx);
   const b = board(s);
   const ghosts = preview
     ? preview.ships.filter((p) => {
@@ -158,7 +177,11 @@ function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; pr
     : [];
   const shipStyle = (pos: number, col: number) => ({ top: (pos + 1) * ROW_H + 3, left: `calc(${col * 20}% + 10% - 12px)` });
   return (
-    <section className="relative flex rounded-md border border-border sky-gradient" aria-label="Sky">
+    <section
+      className={cn("relative flex rounded-md border border-border bg-cover bg-center", look === "abstract" && "sky-gradient")}
+      style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.35)), url(${skyBg})` } : undefined}
+      aria-label="Sky"
+    >
       <div className="relative w-8 shrink-0 border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
         {b.msEffects.map((e, r) => (
           <div key={r} className="absolute inset-x-0 flex items-center justify-center border-t border-border/30" style={{ top: (r + 1) * ROW_H, height: ROW_H }}>
@@ -257,6 +280,7 @@ function Base({
   onDieDown: (dieId: number, e: RPointerEvent) => void;
   draggingId: number | null;
 }) {
+  const { look } = useContext(LookCtx);
   const b = board(s);
   const route = b.route;
   const inRoom = new Set(b.rooms.flatMap((r) => r.cells.map(key)));
@@ -272,7 +296,11 @@ function Base({
   const excCell = route[exc]!;
 
   return (
-    <section aria-label="Underground base" className="flex rounded-md border border-border bg-card/60">
+    <section
+      aria-label="Underground base"
+      className="flex rounded-md border border-border bg-card/60 bg-cover"
+      style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)), url(${baseBg})` } : undefined}
+    >
       <div className="flex w-8 shrink-0 flex-col-reverse items-stretch gap-0.5 border-r border-border/60 px-1 py-1" aria-label="Research track">
         {b.research.slice(1).map((v, i) => (
           <span
@@ -504,6 +532,7 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
           <p className="text-[11px] text-muted-foreground">
             This setup: {cur ? `${cur.won}/${cur.played} won (${pct(cur)})${cur.bestRounds !== null ? ` · best win in ${cur.bestRounds} rounds` : ""}` : "not played yet"}
           </p>
+          <LookPicker />
           <ActionBtn tone="primary" onClick={() => { onNew(d); setOpen(false); }}>
             Start new game
           </ActionBtn>
@@ -530,6 +559,23 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function LookPicker() {
+  const { look, setLook } = useContext(LookCtx);
+  return (
+    <div className="flex items-center justify-between">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">Look</p>
+      <div className="flex gap-1 text-[11px]" role="radiogroup" aria-label="Look">
+        {(["illustrated", "abstract"] as const).map((l) => (
+          <button key={l} type="button" role="radio" aria-checked={look === l} onClick={() => setLook(l)}
+            className={cn("rounded-sm border px-2 py-0.5 capitalize", look === l ? "border-research text-research" : "border-border text-muted-foreground")}>
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -581,6 +627,10 @@ function RulesSheet() {
 /* ---------- game ---------- */
 export function Game() {
   const [game, setGame] = useState<{ s: GameState; n: number } | null>(null);
+  const [look, setLookState] = useState<Look>("illustrated");
+  useEffect(() => {
+    if (localStorage.getItem("ufs-look") === "abstract") setLookState("abstract");
+  }, []);
   // A game saved in the old format (e.g. after an update) gets replaced by a fresh one.
   useEffect(() => {
     if (game && !game.s) setGame({ s: newGame(), n: 1 });
@@ -594,7 +644,11 @@ export function Game() {
     localStorage.setItem("ufs-difficulty", d);
     setGame((g) => ({ s: newGame(Math.random, d), n: (g?.n ?? 0) + 1 }));
   };
-  return <GameView key={game.n} initial={game.s} onNew={onNew} />;
+  return (
+    <LookCtx.Provider value={{ look, setLook: (l) => { localStorage.setItem("ufs-look", l); setLookState(l); } }}>
+      <GameView key={game.n} initial={game.s} onNew={onNew} />
+    </LookCtx.Provider>
+  );
 }
 
 function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficulty) => void }) {
