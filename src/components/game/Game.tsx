@@ -1,3 +1,7 @@
+import pxEnergy from "@/assets/px-energy.png";
+import pxRobot from "@/assets/px-robot.png";
+import pxFighter from "@/assets/px-fighter.png";
+import pxResearch from "@/assets/px-research.png";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Lock, Menu, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +56,7 @@ const PART: Record<RoomPart, { label: string; border: string; text: string; Icon
   fighter: { label: "Fighters", border: "border-room-fighter", text: "text-room-fighter", Icon: Plane },
   research: { label: "Lab", border: "border-room-research", text: "text-room-research", Icon: FlaskConical },
 };
+const PX: Partial<Record<RoomPart, string>> = { energy: pxEnergy, robot: pxRobot, fighter: pxFighter, research: pxResearch };
 const roomLabel = (r: Room) => r.parts.map((p) => PART[p].label).join(" + ");
 const RoomIcons = ({ r, className }: { r: Room; className?: string }) => (
   <span className={cn("flex gap-0.5", className)}>
@@ -395,6 +400,11 @@ function Base({
                   dimmed && "opacity-50",
                 )}
               >
+                {look === "illustrated" && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center gap-0.5 opacity-40">
+                    {r.parts.map((p) => PX[p] && <img key={p} src={PX[p]} alt="" className="h-4/5 max-h-11 [image-rendering:pixelated]" />)}
+                  </span>
+                )}
                 <RoomIcons r={r} className="pointer-events-none absolute left-1 top-0.5 opacity-70" />
                 {r.mod !== 0 && <span className="absolute right-0.5 top-0.5 rounded-sm bg-background px-1 text-[10px] font-bold text-foreground">{r.mod > 0 ? `+${r.mod}` : r.mod}</span>}
                 {r.cost > 0 && (
@@ -603,6 +613,7 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
             This setup: {cur ? `${cur.won}/${cur.played} won (${pct(cur)})${cur.bestRounds !== null ? ` · best win in ${cur.bestRounds} rounds` : ""}` : "not played yet"}
           </p>
           <LookPicker />
+          <ThemePicker />
           <ActionBtn tone="primary" onClick={() => { onNew(d); setOpen(false); }}>
             Start new game
           </ActionBtn>
@@ -629,6 +640,29 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function ThemePicker() {
+  const [t, setT] = useState("dark");
+  useEffect(() => setT(localStorage.getItem("ufs-theme") ?? "dark"), []);
+  const pick = (v: string) => {
+    localStorage.setItem("ufs-theme", v);
+    document.documentElement.classList.toggle("theme-light", v === "light");
+    setT(v);
+  };
+  return (
+    <div className="flex items-center justify-between">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">Colors</p>
+      <div className="flex gap-1 text-[11px]" role="radiogroup" aria-label="Colors">
+        {(["dark", "light"] as const).map((l) => (
+          <button key={l} type="button" role="radio" aria-checked={t === l} onClick={() => pick(l)}
+            className={cn("rounded-sm border px-2 py-0.5 capitalize", t === l ? "border-research text-research" : "border-border text-muted-foreground")}>
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -692,6 +726,7 @@ export function Game() {
   const [look, setLookState] = useState<Look>("illustrated");
   useEffect(() => {
     if (localStorage.getItem("ufs-look") === "abstract") setLookState("abstract");
+    document.documentElement.classList.toggle("theme-light", localStorage.getItem("ufs-theme") === "light");
   }, []);
   // A game saved in the old format (e.g. after an update) gets replaced by a fresh one.
   useEffect(() => {
