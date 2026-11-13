@@ -1,4 +1,4 @@
-import { BOARDS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, START_ENERGY, type Board, type Difficulty, type Room } from "./data";
+import { BOARDS, composeBoard, normalizeSetup, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, START_ENERGY, type Board, type Difficulty, type Room } from "./data";
 
 export type Rng = () => number;
 export type Cell = [number, number];
@@ -43,7 +43,7 @@ export interface GameState {
   endReason?: string;
 }
 
-export const board = (s: { difficulty: Difficulty }): Board => BOARDS[s.difficulty];
+export const board = (s: { difficulty: Difficulty }): Board => composeBoard(s.difficulty);
 export const roll = (rng: Rng) => 1 + Math.floor(rng() * 6);
 const eq = (a: Cell, b: Cell) => a[0] === b[0] && a[1] === b[1];
 export const roomAt = (s: GameState, cell: Cell): Room | undefined => board(s).rooms.find((r) => r.cells.some((c) => eq(c, cell)));
@@ -62,7 +62,8 @@ function newDice(rng: Rng): Die[] {
 }
 
 export function newGame(rng: Rng = Math.random, difficulty: Difficulty = "easy"): GameState {
-  const red = BOARDS[difficulty].startingRed;
+  difficulty = normalizeSetup(difficulty);
+  const red = composeBoard(difficulty).startingRed;
   return {
     difficulty,
     round: 1,

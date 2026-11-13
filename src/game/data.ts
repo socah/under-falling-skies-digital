@@ -1,6 +1,7 @@
 // Board data transcribed from the Under Falling Skies 9-card PnP (easy and hard sides).
 export type SkyIcon = { t: "exp"; v: number } | { t: "L" } | { t: "R" } | { t: "saucer" } | null;
-export type Difficulty = "easy" | "hard";
+/** Setup code: one "e"/"h" per card in CARDS order (e.g. "eehheeee"). "easy"/"hard" are aliases. */
+export type Difficulty = string;
 
 const _ = null;
 const E = (v: number): SkyIcon => ({ t: "exp", v });
@@ -169,4 +170,52 @@ const HARD: Board = {
   startingRed: 2,
 };
 
-export const BOARDS: Record<Difficulty, Board> = { easy: EASY, hard: HARD };
+export const BOARDS = { easy: EASY, hard: HARD };
+
+/** The 8 flippable cards, top to bottom, then the tracks card. */
+export const CARDS = [
+  { id: "ms", name: "Mothership", hint: "2 red ships wait from the start" },
+  { id: "s1", name: "Deep space", hint: "Sky rows 1–4" },
+  { id: "s2", name: "Space", hint: "Sky rows 5–8" },
+  { id: "s3", name: "Clouds", hint: "Sky rows 9–12 · skull row" },
+  { id: "s4", name: "City", hint: "Sky rows 13–15" },
+  { id: "b1", name: "Upper base", hint: "Base rows 1–3 · excavator start" },
+  { id: "b2", name: "Lower base", hint: "Base rows 4–6" },
+  { id: "tr", name: "Research track", hint: "Track costs" },
+] as const;
+
+export function normalizeSetup(d: string): string {
+  if (d === "easy") return "e".repeat(CARDS.length);
+  if (d === "hard") return "h".repeat(CARDS.length);
+  return /^[eh]{8}$/.test(d) ? d : "e".repeat(CARDS.length);
+}
+export const setupLevel = (d: string) => normalizeSetup(d).split("").filter((x) => x === "h").length;
+
+type C = [number, number];
+const ROWS_OF = (from: number, to: number) => (r: Room) => r.cells.every((c) => c[0] >= from && c[0] <= to);
+const row = (r: number, dir: 1 | -1, cols = [0, 1, 2, 3, 4]): C[] => (dir === 1 ? cols : [...cols].reverse()).map((c) => [r, c] as C);
+
+const cache = new Map<string, Board>();
+export function composeBoard(d: string): Board {
+  const code = normalizeSetup(d);
+  const hit = cache.get(code);
+  if (hit) return hit;
+  const h = (i: number) => code[i] === "h";
+  const src = (i: number) => (h(i) ? HARD : EASY);
+  const sky = [0, 1, 2, 3].flatMap((k) => src(k + 1).sky.slice(k * 4, k === 3 ? 15 : k * 4 + 4));
+  const msEffects = [0, 1, 2].flatMap((k) => src(k + 1).msEffects.slice(k * 4, k * 4 + 4));
+  const skullRow = src(3).skullRow;
+  const rooms = [...src(5).rooms.filter(ROWS_OF(0, 2)), ...src(6).rooms.filter(ROWS_OF(3, 5))];
+  // Upper card: easy starts at the right of row 3; hard starts at row 2 and digs row 3 right→left.
+  const upper: C[] = h(5) ? [[1, 4], ...row(2, -1)] : [[2, 4]];
+  const enterLeft = h(5); // where the path enters the lower card's first row
+  let lower: C[];
+  if (!h(6)) lower = enterLeft ? [...row(3, 1), ...row(4, -1), ...row(5, 1)] : [...row(3, -1), ...row(4, 1), ...row(5, -1)];
+  else if (enterLeft)
+    // Down through the tall lab, exit left, step back up, continue the zigzag.
+    lower = [...row(3, 1), [4, 4], [5, 4], [5, 3], ...row(4, -1, [0, 1, 2, 3]), [5, 0], [5, 1]];
+  else lower = [...row(3, -1), ...row(4, 1), [5, 4], [5, 3], [5, 2], [5, 1], [5, 0]];
+  const b: Board = { sky, msEffects, skullRow, rooms, route: [...upper, ...lower], research: src(7).research, startingRed: src(0).startingRed };
+  cache.set(code, b);
+  return b;
+}
