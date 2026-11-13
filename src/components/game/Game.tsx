@@ -282,8 +282,8 @@ function Base({
                 className={cn(
                   "relative flex h-full items-center justify-center rounded-sm border-2 bg-secondary/60 transition-all",
                   PART[r.parts[0]!].border,
-                  r.parts.length > 1 && "border-r-room-robot",
-                  r.parts[1] === "fighter" && "border-r-room-fighter",
+                  r.parts[1] === "fighter" && "border-r-room-fighter border-b-room-fighter",
+                  r.parts[1] === "robot" && "border-r-room-robot border-b-room-robot",
                   !usable && "border-dashed opacity-40",
                   activeRooms.has(r.id) && "box-glow text-energy",
                   dimmed && "opacity-50",
