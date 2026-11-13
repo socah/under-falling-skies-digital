@@ -547,6 +547,10 @@ function RulesSheet() {
 /* ---------- game ---------- */
 export function Game() {
   const [game, setGame] = useState<{ s: GameState; n: number } | null>(null);
+  // A game saved in the old format (e.g. after an update) gets replaced by a fresh one.
+  useEffect(() => {
+    if (game && !game.s) setGame({ s: newGame(), n: 1 });
+  }, [game]);
   useEffect(() => {
     const d: Difficulty = localStorage.getItem("ufs-difficulty") === "hard" ? "hard" : "easy";
     setGame({ s: newGame(Math.random, d), n: 0 });
