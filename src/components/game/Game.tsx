@@ -571,7 +571,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
   // walk the excavator token one space at a time
   useEffect(() => {
-    if (exc === s.excavator) return;
+    if (exc === s.excavator) return undefined;
     const t = setTimeout(() => setExc((e) => e + Math.sign(s.excavator - e)), 300);
     return () => clearTimeout(t);
   }, [exc, s.excavator]);
@@ -686,7 +686,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const cellEl = el?.closest("[data-cell]") as HTMLElement | null;
       overTray = !!el?.closest("[data-tray]");
-      const c = cellEl ? (cellEl.dataset.cell!.split(",").map(Number) as Cell) : null;
+      const c = cellEl ? (cellEl.dataset["cell"]!.split(",").map(Number) as Cell) : null;
       target = c && latest.current.legal(dieId, c) ? c : null;
       setHover(target);
     };
