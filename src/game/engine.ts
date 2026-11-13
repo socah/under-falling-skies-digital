@@ -269,6 +269,19 @@ export function resolvables(s: GameState) {
   return out;
 }
 
+/** Energy that filled, unresolved generator rooms will add this round (before other room costs). */
+export function pendingEnergy(s: GameState) {
+  let n = 0;
+  for (const r of board(s).rooms) {
+    if (!r.parts.includes("energy")) continue;
+    const { dice, robots, full } = roomContents(s, r);
+    if (!full || !dice.length && !robots.length) continue;
+    const v = dice.reduce((a, d) => a + d.value, 0) + robots.reduce((a, b) => a + b.value, 0) + r.mod;
+    if (v > 0) n += v;
+  }
+  return n;
+}
+
 const findRoom = (s: GameState, id: string) => board(s).rooms.find((x) => x.id === id)!;
 
 export function resolveRoom(prev: GameState, roomId: string, use: boolean): GameState {

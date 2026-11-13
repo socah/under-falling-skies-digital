@@ -19,6 +19,7 @@ import {
   resolveDig,
   resolveRoom,
   roomContents,
+  pendingEnergy,
   roomUsable,
   routeIndex,
   shipMove,
@@ -194,6 +195,14 @@ function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; pr
             ))}
           </div>
         </div>
+        {s.ships.map((sh) => {
+          const ic = sh.pos === null ? null : b.sky[sh.pos]?.[sh.col];
+          return ic?.t === "exp" ? (
+            <span key={`t${sh.id}`} className="absolute z-30 rounded-sm bg-warn px-0.5 text-[8px] font-bold leading-tight text-background transition-all duration-500" style={{ top: (sh.pos! + 1) * ROW_H, left: `calc(${sh.col * 20}% + 10% + 6px)` }}>
+              {ic.v}+
+            </span>
+          ) : null;
+        })}
         {s.ships.map((sh) =>
           sh.pos === null ? null : (
             <div key={sh.id} className="absolute z-20 transition-all duration-500 ease-out" style={shipStyle(sh.pos, sh.col)}>
@@ -408,9 +417,7 @@ function Base({
 /* ---------- header & menus ---------- */
 function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) {
   const b = board(s);
-  const active = s.ships.filter((x) => x.pos !== null && x.pos >= s.mothership).length;
-  const closest = Math.max(-1, ...s.ships.filter((x) => x.pos !== null).map((x) => x.pos!));
-  const threat = closest >= 11 ? "CRITICAL" : closest >= 7 ? "HIGH" : active > 0 ? "ELEVATED" : "LOW";
+  const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/90 px-3 py-2 backdrop-blur">
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -422,10 +429,7 @@ function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) 
           <GameMenu current={s.difficulty} onNew={onNew} />
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-1.5 text-[10px] uppercase">
-        <Stat label="Mothership" tone="text-research">
-          {s.mothership}/{b.skullRow + 1}
-        </Stat>
+      <div className="grid grid-cols-2 gap-1.5 text-[10px] uppercase">
         <Stat label="Hull" tone="text-threat">
           <span className="flex gap-0.5">
             {Array.from({ length: MAX_DAMAGE }, (_, i) => (
@@ -435,9 +439,7 @@ function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) 
         </Stat>
         <Stat label="Energy" tone="text-energy">
           {s.energy}/{MAX_ENERGY}
-        </Stat>
-        <Stat label="Threat" tone={threat === "LOW" ? "text-research" : "text-threat"}>
-          <span className="text-[11px]">{threat}</span>
+          {gain > 0 && <span className="ml-1.5 text-[11px] text-research">+{gain} this turn</span>}
         </Stat>
       </div>
     </header>

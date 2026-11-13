@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BOARDS, composeBoard, setupLevel } from "./data";
 import {
   board,
+  pendingEnergy,
   canPlace,
   isExcavated,
   replay,
@@ -183,6 +184,18 @@ describe("mixed card setups", () => {
   });
   it("level counts hard cards", () => {
     expect(setupLevel("hheeeehe")).toBe(3);
+  });
+});
+
+describe("upcoming energy", () => {
+  it("counts a filled generator's value including its modifier", () => {
+    const s = game();
+    s.dice[0]!.value = 4;
+    s.dice[0]!.cell = [1, 0]; // easy generator, -1
+    expect(pendingEnergy(s)).toBe(3);
+  });
+  it("is zero with no generator filled", () => {
+    expect(pendingEnergy(game())).toBe(0);
   });
 });
 
