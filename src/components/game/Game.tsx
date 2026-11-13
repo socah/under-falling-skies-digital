@@ -643,7 +643,10 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     const c = ctx(dieId);
     const list = [...c.pre, ...c.post];
     const next = replay(lockBase, list);
-    if (!next) return toast.error("Can't return that die while the white die depends on it.");
+    if (!next) {
+      toast.error("Can't return that die while the white die depends on it.");
+      return;
+    }
     setS(next);
     setPlacements(list);
     setSel(dieId);
