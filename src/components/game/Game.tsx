@@ -496,8 +496,6 @@ function Base({
 /* ---------- header & menus ---------- */
 /** Hull, energy, round and menu, tucked into the free rows of the mothership-effect column. */
 function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) => void; free: number[] }) {
-  const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
-  const dE = useChange(s.energy, (a, b) => b - a);
   const hit = useChange(s.damage, (a, b) => (b > a ? b - a : null), 500);
   const items: ReactNode[] = [
     <GameMenu key="m" current={s.difficulty} onNew={onNew} />,
