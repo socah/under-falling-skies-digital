@@ -222,7 +222,7 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
   return (
     <section
       className={cn("relative flex rounded-md border border-border bg-cover bg-center", look === "abstract" && "sky-gradient")}
-      style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.35)), url(${skyBg})` } : undefined}
+      style={look === "illustrated" ? { backgroundImage: `linear-gradient(var(--art-veil), var(--art-veil)), url(${skyBg})` } : undefined}
       aria-label="Sky"
     >
       <div className="relative w-10 shrink-0 border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
@@ -353,7 +353,7 @@ function Base({
     <section
       aria-label="Underground base"
       className="flex rounded-md border border-border bg-card/60 bg-cover"
-      style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)), url(${baseBg})` } : undefined}
+      style={look === "illustrated" ? { backgroundImage: `linear-gradient(var(--art-veil-base), var(--art-veil-base)), url(${baseBg})` } : undefined}
     >
       <div className="flex w-8 shrink-0 flex-col-reverse items-stretch gap-0.5 border-r border-border/60 px-1 py-1" aria-label="Research track">
         {b.research.slice(1).map((v, i) => (

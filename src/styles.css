@@ -122,6 +122,8 @@
   --mothership: oklch(0.24 0.05 175);
   --die-grey: oklch(0.35 0.01 220);
   --die-white: oklch(0.95 0.01 180);
+  --art-veil: rgb(0 0 0 / 0.35);
+  --art-veil-base: rgb(0 0 0 / 0.45);
   --font-display: "Chakra Petch", ui-sans-serif, sans-serif;
   --font-mono: "Share Tech Mono", ui-monospace, monospace;
 }
@@ -230,4 +232,5 @@
   --die-grey: oklch(0.55 0.01 220);
   --die-white: oklch(0.99 0.005 85);
 }
+.theme-light { --art-veil: oklch(0.97 0.02 85 / 0.45); --art-veil-base: oklch(0.93 0.03 75 / 0.72); }
 .theme-light body { background-image: none; }
