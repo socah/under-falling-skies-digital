@@ -184,3 +184,17 @@
 @utility animate-route { animation: route-flow 0.6s linear infinite; }
 @keyframes dug-flash { 0% { background-color: color-mix(in oklab, var(--research) 55%, transparent); } 100% { background-color: transparent; } }
 @utility animate-dug { animation: dug-flash 0.9s ease-out; }
+
+/* action effects */
+@keyframes boom { 0% { transform: scale(0.2); opacity: 1; } 60% { transform: scale(1.5); opacity: 0.9; } 100% { transform: scale(2.1); opacity: 0; } }
+@utility animate-boom { animation: boom 0.8s ease-out forwards; }
+@keyframes laser { 0% { transform: scaleY(0); opacity: 1; } 40% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
+@utility animate-laser { animation: laser 0.5s ease-out forwards; transform-origin: bottom; }
+@keyframes float-up { 0% { transform: translateY(4px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-18px); opacity: 0; } }
+@utility animate-float-up { animation: float-up 1.2s ease-out forwards; }
+@keyframes hit-shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+@utility animate-hit { animation: hit-shake 0.45s ease-in-out; box-shadow: 0 0 14px var(--threat); }
+@keyframes pop-in { 0% { transform: scale(0) rotate(-90deg); } 70% { transform: scale(1.25) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+@utility animate-pop { animation: pop-in 0.5s cubic-bezier(.3,1.5,.6,1); }
+@keyframes glow-pulse { 0% { box-shadow: 0 0 0 0 var(--research); } 100% { box-shadow: 0 0 0 8px transparent; } }
+@utility animate-glow-pulse { animation: glow-pulse 0.9s ease-out 2; }
