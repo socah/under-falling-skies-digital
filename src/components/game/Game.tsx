@@ -1,7 +1,7 @@
-import pxEnergy from "@/assets/px-energy.png";
-import pxRobot from "@/assets/px-robot.png";
-import pxFighter from "@/assets/px-fighter.png";
-import pxResearch from "@/assets/px-research.png";
+import pxEnergy from "@/assets/room-energy.jpg";
+import pxRobot from "@/assets/room-robot.jpg";
+import pxFighter from "@/assets/room-fighter.jpg";
+import pxResearch from "@/assets/room-research.jpg";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Lock, Menu, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -222,7 +222,7 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
   return (
     <section
       className={cn("relative flex rounded-md border border-border bg-cover bg-center", look === "abstract" && "sky-gradient")}
-      style={look === "illustrated" ? { backgroundImage: `linear-gradient(var(--art-veil), var(--art-veil)), url(${skyBg})` } : undefined}
+      style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.35)), url(${skyBg})` } : undefined}
       aria-label="Sky"
     >
       <div className="relative w-10 shrink-0 border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
@@ -353,7 +353,7 @@ function Base({
     <section
       aria-label="Underground base"
       className="flex rounded-md border border-border bg-card/60 bg-cover"
-      style={look === "illustrated" ? { backgroundImage: `linear-gradient(var(--art-veil-base), var(--art-veil-base)), url(${baseBg})` } : undefined}
+      style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)), url(${baseBg})` } : undefined}
     >
       <div className="flex w-8 shrink-0 flex-col-reverse items-stretch gap-0.5 border-r border-border/60 px-1 py-1" aria-label="Research track">
         {b.research.slice(1).map((v, i) => (
@@ -401,8 +401,8 @@ function Base({
                 )}
               >
                 {look === "illustrated" && (
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center gap-0.5 opacity-40">
-                    {r.parts.map((p) => PX[p] && <img key={p} src={PX[p]} alt="" className="h-4/5 max-h-11 [image-rendering:pixelated]" />)}
+                  <span className="pointer-events-none absolute inset-0 flex overflow-hidden rounded-[1px] opacity-60">
+                    {r.parts.map((p) => PX[p] && <img key={p} src={PX[p]} alt="" className="h-full min-w-0 flex-1 object-cover [image-rendering:pixelated]" />)}
                   </span>
                 )}
                 <RoomIcons r={r} className="pointer-events-none absolute left-1 top-0.5 opacity-70" />
@@ -613,7 +613,6 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
             This setup: {cur ? `${cur.won}/${cur.played} won (${pct(cur)})${cur.bestRounds !== null ? ` · best win in ${cur.bestRounds} rounds` : ""}` : "not played yet"}
           </p>
           <LookPicker />
-          <ThemePicker />
           <ActionBtn tone="primary" onClick={() => { onNew(d); setOpen(false); }}>
             Start new game
           </ActionBtn>
@@ -640,29 +639,6 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
         </div>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function ThemePicker() {
-  const [t, setT] = useState("dark");
-  useEffect(() => setT(localStorage.getItem("ufs-theme") ?? "dark"), []);
-  const pick = (v: string) => {
-    localStorage.setItem("ufs-theme", v);
-    document.documentElement.classList.toggle("theme-light", v === "light");
-    setT(v);
-  };
-  return (
-    <div className="flex items-center justify-between">
-      <p className="text-xs uppercase tracking-widest text-muted-foreground">Colors</p>
-      <div className="flex gap-1 text-[11px]" role="radiogroup" aria-label="Colors">
-        {(["dark", "light"] as const).map((l) => (
-          <button key={l} type="button" role="radio" aria-checked={t === l} onClick={() => pick(l)}
-            className={cn("rounded-sm border px-2 py-0.5 capitalize", t === l ? "border-research text-research" : "border-border text-muted-foreground")}>
-            {l}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -726,7 +702,6 @@ export function Game() {
   const [look, setLookState] = useState<Look>("illustrated");
   useEffect(() => {
     if (localStorage.getItem("ufs-look") === "abstract") setLookState("abstract");
-    document.documentElement.classList.toggle("theme-light", localStorage.getItem("ufs-theme") === "light");
   }, []);
   // A game saved in the old format (e.g. after an update) gets replaced by a fresh one.
   useEffect(() => {
