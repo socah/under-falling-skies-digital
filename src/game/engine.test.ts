@@ -160,6 +160,31 @@ describe("hard side", () => {
   });
 });
 
+describe("mixed card setups", () => {
+  it("all-easy and all-hard setups match the full easy and hard boards", () => {
+    expect(composeBoard("eeeeeeee")).toEqual(BOARDS.easy);
+    expect(composeBoard("hhhhhhhh")).toEqual(BOARDS.hard);
+  });
+  it("only the mothership card on hard gives 2 red ships and easy everything else", () => {
+    const s = newGame(fixed(3), "heeeeeee");
+    expect(s.ships.filter((x) => x.color === "red" && !x.destroyed).length).toBe(2);
+    expect(board(s).skullRow).toBe(11);
+  });
+  it("the hard clouds card moves the skull to row 10", () => {
+    expect(composeBoard("eeeheeee").skullRow).toBe(10);
+  });
+  it("every combination's dig path is a connected walk through distinct spaces", () => {
+    for (let m = 0; m < 4; m++) {
+      const r = composeBoard(`eeeee${m & 1 ? "h" : "e"}${m & 2 ? "h" : "e"}e`).route;
+      expect(new Set(r.map((c) => c.join())).size).toBe(r.length);
+      for (let i = 1; i < r.length; i++) expect(Math.abs(r[i]![0] - r[i - 1]![0]) + Math.abs(r[i]![1] - r[i - 1]![1])).toBe(1);
+    }
+  });
+  it("level counts hard cards", () => {
+    expect(setupLevel("hheeeehe")).toBe(3);
+  });
+});
+
 describe("rearranging dice", () => {
   it("replaying placements without a die restores its column", () => {
     const base = game();

@@ -1,4 +1,4 @@
-import { BOARDS, composeBoard, normalizeSetup, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, START_ENERGY, type Board, type Difficulty, type Room } from "./data";
+import { BOARDS, composeBoard, normalizeSetup, setupLevel, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, START_ENERGY, type Board, type Difficulty, type Room } from "./data";
 
 export type Rng = () => number;
 export type Cell = [number, number];
@@ -82,7 +82,7 @@ export function newGame(rng: Rng = Math.random, difficulty: Difficulty = "easy")
     robots: [],
     needsReroll: false,
     pendingRobotValue: null,
-    log: [`Round 1 (${difficulty}) — dice rolled.`],
+    log: [`Round 1 (level ${setupLevel(difficulty)}) — dice rolled.`],
     rollId: 1,
   };
 }
