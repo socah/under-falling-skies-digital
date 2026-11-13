@@ -19,6 +19,7 @@ import {
   resolveDig,
   resolveRoom,
   roomContents,
+  pendingEnergy,
   roomUsable,
   routeIndex,
   shipMove,
