@@ -638,14 +638,6 @@ function LookPicker() {
   );
 }
 
-function Stat({ label, tone, children, className }: { label: string; tone: string; children: ReactNode; className?: string | undefined }) {
-  return (
-    <div className={cn("relative rounded-sm border border-border bg-card/70 px-1.5 py-1", className)}>
-      <div className="text-muted-foreground">{label}</div>
-      <div className={cn("flex h-5 items-center font-display text-sm font-bold glow", tone)}>{children}</div>
-    </div>
-  );
-}
 
 function roomValue(s: GameState, r: Room) {
   const { dice, robots } = roomContents(s, r);
