@@ -226,7 +226,8 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
             {e && <MsGlyph e={e} />}
           </div>
         ))}
-        <SideStats s={s} onNew={onNew} free={[-1, ...b.msEffects.flatMap((e, r) => (e ? [] : [r]))]} />
+        <SideStats s={s} onNew={onNew} free={[-1, ...b.msEffects.flatMap((e, r) => (e || r > b.skullRow ? [] : [r]))]} />
+        <EnergyBoxes s={s} top={(b.skullRow + 2) * ROW_H} />
         <div className="absolute -right-1.5 z-20 flex items-center text-research glow transition-all duration-700" style={{ top: (s.mothership + 1) * ROW_H, height: ROW_H }}>
           ▶
         </div>
@@ -495,8 +496,6 @@ function Base({
 /* ---------- header & menus ---------- */
 /** Hull, energy, round and menu, tucked into the free rows of the mothership-effect column. */
 function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) => void; free: number[] }) {
-  const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
-  const dE = useChange(s.energy, (a, b) => b - a);
   const hit = useChange(s.damage, (a, b) => (b > a ? b - a : null), 500);
   const items: ReactNode[] = [
     <GameMenu key="m" current={s.difficulty} onNew={onNew} />,
@@ -505,15 +504,6 @@ function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) =>
         <span key={i} className={cn("h-3 w-1 rounded-[1px]", i < MAX_DAMAGE - s.damage ? "bg-research" : "bg-threat/40")} />
       ))}
     </span>,
-    <span key="e" aria-label="Energy" className="relative flex items-center font-display text-xs font-bold text-energy glow">
-      <Zap className="size-3" />{s.energy}
-      {dE && (
-        <span key={dE.k} className={cn("pointer-events-none absolute left-full animate-float-up text-xs", dE.d > 0 ? "text-energy" : "text-threat")}>
-          {dE.d > 0 ? `+${dE.d}` : dE.d}
-        </span>
-      )}
-    </span>,
-    gain > 0 ? <span key="g" className="text-[10px] font-bold text-research" title="Energy gained this turn">+{gain}</span> : null,
     <span key="r" className="text-[9px] text-muted-foreground" title={`Level ${setupLevel(s.difficulty)}`}>R{s.round}</span>,
   ];
   let k = 0;
@@ -530,6 +520,27 @@ function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) =>
         );
       })}
     </>
+  );
+}
+
+function EnergyBoxes({ s, top }: { s: GameState; top: number }) {
+  const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
+  const dE = useChange(s.energy, (a, b) => b - a);
+  return (
+    <div aria-label={`Energy ${s.energy} of ${MAX_ENERGY}`} title={`Energy ${s.energy}/${MAX_ENERGY}${gain ? ` (+${gain} this turn)` : ""}`} className="absolute inset-x-0 bottom-1 z-30 flex flex-col items-center justify-end gap-0.5" style={{ top }}>
+      <Zap className="size-3 text-energy" />
+      <div className="relative flex flex-col-reverse gap-0.5">
+        {Array.from({ length: MAX_ENERGY }, (_, i) => (
+          <span key={i} className={cn("h-2 w-4 rounded-[2px] border transition-colors duration-300",
+            i < s.energy ? "border-energy bg-energy box-glow" : i < s.energy + gain ? "border-energy/80 bg-energy/25 animate-glow-pulse" : "border-energy/30 bg-background/40")} />
+        ))}
+        {dE && (
+          <span key={dE.k} className={cn("pointer-events-none absolute left-full top-0 animate-float-up text-xs font-bold", dE.d > 0 ? "text-energy" : "text-threat")}>
+            {dE.d > 0 ? `+${dE.d}` : dE.d}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
