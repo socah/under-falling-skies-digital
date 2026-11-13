@@ -138,7 +138,7 @@ function SkyGlyph({ s, r, c }: { s: GameState; r: number; c: number }) {
 }
 
 function MsGlyph({ e }: { e: MsEffect | undefined }) {
-  if (!e) return null;
+  if (!e) return <span className="size-1 rounded-full bg-muted-foreground/40" />;
   const cls = "flex items-center gap-px text-[9px] font-bold";
   if (e.t === "skull") return <Skull className="size-3.5 text-foreground" />;
   if (e.t === "damage") return <span className={cn(cls, "text-threat")}>✸</span>;
@@ -160,7 +160,7 @@ function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; pr
     <section className="relative flex rounded-md border border-border sky-gradient" aria-label="Sky">
       <div className="relative w-8 shrink-0 border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
         {b.msEffects.map((e, r) => (
-          <div key={r} className="absolute inset-x-0 flex items-center justify-center" style={{ top: (r + 1) * ROW_H, height: ROW_H }}>
+          <div key={r} className="absolute inset-x-0 flex items-center justify-center border-t border-border/30" style={{ top: (r + 1) * ROW_H, height: ROW_H }}>
             <MsGlyph e={e} />
           </div>
         ))}
@@ -169,6 +169,9 @@ function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; pr
         </div>
       </div>
       <div className="relative flex-1 overflow-hidden" style={{ height: SKY_ROWS * ROW_H }}>
+        {b.msEffects.map((_, r) => (
+          <div key={`l${r}`} className="absolute inset-x-0 border-t border-border/30" style={{ top: (r + 1) * ROW_H }} />
+        ))}
         {focusCol !== null && <div className="absolute inset-y-0 bg-energy/10 ring-1 ring-energy/50" style={{ left: `${focusCol * 20}%`, width: "20%" }} />}
         {b.sky.map((row, r) =>
           row.map((_, c) => (
@@ -300,7 +303,7 @@ function Base({
                   PART[r.parts[0]!].border,
                   r.parts[1] === "fighter" && "border-r-room-fighter border-b-room-fighter",
                   r.parts[1] === "robot" && "border-r-room-robot border-b-room-robot",
-                  !usable && "border-dashed opacity-40",
+                  !usable && "opacity-20",
                   activeRooms.has(r.id) && "box-glow text-energy",
                   dimmed && "opacity-50",
                 )}
@@ -337,10 +340,9 @@ function Base({
                 y2={z.y}
                 strokeLinecap="round"
                 strokeWidth={dug ? 3 : reachable ? 4 : 2}
-                strokeDasharray={dug ? undefined : "4 4"}
                 className={cn(
                   "transition-all duration-300",
-                  dug ? "stroke-research/70" : reachable ? "animate-route stroke-energy" : "stroke-muted-foreground/50",
+                  dug ? "stroke-research/70" : reachable ? "animate-route stroke-energy" : "stroke-muted-foreground/25",
                   reach !== null && !dug && !reachable && "opacity-25",
                 )}
                 style={dug ? undefined : { filter: reachable ? "drop-shadow(0 0 3px var(--energy))" : undefined }}
@@ -348,24 +350,6 @@ function Base({
             );
           })}
         </svg>
-        {/* distance labels on undug route spaces */}
-        {route.map((c, i) => {
-          if (i <= exc) return null;
-          const reachable = reach !== null && i <= reach;
-          return (
-            <span
-              key={`n${i}`}
-              className={cn(
-                "pointer-events-none absolute z-20 flex size-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-[9px] font-bold transition-all",
-                reachable ? "border-energy bg-energy text-background" : "border-muted-foreground/50 bg-background text-muted-foreground",
-                reach !== null && !reachable && "opacity-30",
-              )}
-              style={{ left: center(c).x, top: c[0] * CELL_H + 11 }}
-            >
-              {i - exc}
-            </span>
-          );
-        })}
         {/* slots */}
         {slots.map((cell) => {
           const die = s.dice.find((d) => same(d.cell, cell));
@@ -689,10 +673,18 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
       toast.error("That move would break the white die's placement.");
       return;
     }
+    if (next.needsReroll && next.dice.some((d) => !d.cell)) {
+      // White die placed with dice left: lock everything and reroll the rest right away.
+      fresh(reroll(next));
+      setSel(null);
+      setPending(null);
+      setHover(null);
+      return;
+    }
     setS(next);
     setPlacements(list);
     const nextDie = next.dice.find((d) => !d.cell);
-    setSel(nextDie && !next.needsReroll ? nextDie.id : null);
+    setSel(nextDie ? nextDie.id : null);
     setPending(null);
     setHover(null);
   };
@@ -815,9 +807,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
             {s.phase === "place" &&
-              (s.needsReroll
-                ? "White die placed — reroll! (or move dice first)"
-                : pending
+              (pending
                   ? "Tap again or confirm"
                   : selPlaced
                     ? "Move this die, or drag it to the tray"
@@ -869,13 +859,13 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
                 <ActionBtn tone="muted" onClick={() => returnDie(sel!)}>
                   Return die to tray
                 </ActionBtn>
-              ) : s.needsReroll ? (
-                <ActionBtn tone="warn" onClick={() => { fresh(reroll(s)); setSel(null); }}>
-                  <Dices className="size-4" /> Reroll available dice
-                </ActionBtn>
               ) : unplaced.length === 0 ? (
                 <ActionBtn tone="primary" onClick={() => { fresh(startResolve(s)); setSel(null); }}>
                   End dice phase · Resolve rooms
+                </ActionBtn>
+              ) : s.needsReroll ? (
+                <ActionBtn tone="warn" onClick={() => { fresh(reroll(s)); setSel(null); }}>
+                  <Dices className="size-4" /> Reroll available dice
                 </ActionBtn>
               ) : pending && selDie ? (
                 <ActionBtn tone="primary" onClick={() => commitDie(selDie.id, pending)}>
@@ -884,8 +874,9 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
               ) : stuck ? (
                 <ActionBtn tone="muted" onClick={() => {
                   const list = [...placements, { dieId: selDie.id, cell: [-1, -1] as Cell }];
-                  setS(replay(lockBase, list)!);
-                  setPlacements(list);
+                  const next = replay(lockBase, list)!;
+                  if (next.needsReroll && next.dice.some((d) => !d.cell)) fresh(reroll(next));
+                  else { setS(next); setPlacements(list); }
                   setSel(null);
                 }}>
                   No legal space — discard die
