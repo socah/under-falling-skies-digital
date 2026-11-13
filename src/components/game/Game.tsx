@@ -164,7 +164,7 @@ function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; pr
             <MsGlyph e={e} />
           </div>
         ))}
-        <div className="absolute -right-1.5 z-20 text-research glow transition-all duration-700" style={{ top: (s.mothership + 1) * ROW_H + 2 }}>
+        <div className="absolute -right-1.5 z-20 flex items-center text-research glow transition-all duration-700" style={{ top: (s.mothership + 1) * ROW_H, height: ROW_H }}>
           ▶
         </div>
       </div>
