@@ -1,25 +1,12 @@
-import {
-  COLS,
-  DAMAGE_ROW,
-  MAX_DAMAGE,
-  MAX_ENERGY,
-  MS_EFFECTS,
-  RESEARCH,
-  ROOMS,
-  ROUTE,
-  SKULL_ROW,
-  SKY,
-  START_ENERGY,
-  TUNNELS,
-  type Room,
-} from "./data";
+import { BOARDS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, START_ENERGY, type Board, type Difficulty, type Room } from "./data";
 
 export type Rng = () => number;
+export type Cell = [number, number];
 export interface Die {
   id: number;
   color: "grey" | "white";
   value: number;
-  cell: [number, number] | null;
+  cell: Cell | null;
   resolved: boolean;
 }
 export interface Ship {
@@ -32,19 +19,20 @@ export interface Ship {
 export interface Robot {
   id: number;
   value: number;
-  cell: [number, number];
+  cell: Cell;
   used: boolean;
   fresh: boolean;
 }
 export type Phase = "place" | "resolve" | "placeRobot" | "won" | "lost";
 export interface GameState {
+  difficulty: Difficulty;
   round: number;
   phase: Phase;
-  mothership: number; // number of sky rows covered
+  mothership: number;
   damage: number;
   energy: number;
   research: number;
-  excavator: number; // index into ROUTE
+  excavator: number; // index into route
   dice: Die[];
   ships: Ship[];
   robots: Robot[];
@@ -55,33 +43,28 @@ export interface GameState {
   endReason?: string;
 }
 
+export const board = (s: { difficulty: Difficulty }): Board => BOARDS[s.difficulty];
 export const roll = (rng: Rng) => 1 + Math.floor(rng() * 6);
-const eq = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
-export const roomAt = (cell: [number, number]): Room | undefined =>
-  ROOMS.find((r) => r.cells.some((c) => eq(c, cell)));
-export const routeIndex = (cell: [number, number]) => ROUTE.findIndex((c) => eq(c, cell));
-export const isTunnel = (cell: [number, number]) => TUNNELS.some((c) => eq(c, cell));
+const eq = (a: Cell, b: Cell) => a[0] === b[0] && a[1] === b[1];
+export const roomAt = (s: GameState, cell: Cell): Room | undefined => board(s).rooms.find((r) => r.cells.some((c) => eq(c, cell)));
+export const routeIndex = (s: GameState, cell: Cell) => board(s).route.findIndex((c) => eq(c, cell));
 
-export function isExcavated(s: GameState, cell: [number, number]) {
-  const i = routeIndex(cell);
-  return i === -1 ? true : i < s.excavator;
+export function isExcavated(s: GameState, cell: Cell) {
+  const i = routeIndex(s, cell);
+  return i === -1 ? true : i <= s.excavator;
 }
 export function roomUsable(s: GameState, r: Room) {
   return r.cells.every((c) => isExcavated(s, c));
 }
 
 function newDice(rng: Rng): Die[] {
-  return [0, 1, 2, 3, 4].map((i) => ({
-    id: i,
-    color: i < 3 ? "grey" : "white",
-    value: roll(rng),
-    cell: null,
-    resolved: false,
-  }));
+  return [0, 1, 2, 3, 4].map((i) => ({ id: i, color: i < 3 ? "grey" : "white", value: roll(rng), cell: null, resolved: false }));
 }
 
-export function newGame(rng: Rng = Math.random): GameState {
+export function newGame(rng: Rng = Math.random, difficulty: Difficulty = "easy"): GameState {
+  const red = BOARDS[difficulty].startingRed;
   return {
+    difficulty,
     round: 1,
     phase: "place",
     mothership: 0,
@@ -92,25 +75,24 @@ export function newGame(rng: Rng = Math.random): GameState {
     dice: newDice(rng),
     ships: [
       ...[0, 1, 2, 3, 4].map((c) => ({ id: c, color: "green" as const, col: c, pos: -1 })),
-      { id: 5, color: "red", col: 0, pos: null, destroyed: true },
-      { id: 6, color: "red", col: 0, pos: null, destroyed: true },
+      { id: 5, color: "red", col: 0, pos: null, destroyed: red < 1 },
+      { id: 6, color: "red", col: 0, pos: null, destroyed: red < 2 },
     ],
     robots: [],
     needsReroll: false,
     pendingRobotValue: null,
-    log: ["Round 1 — dice rolled."],
+    log: [`Round 1 (${difficulty}) — dice rolled.`],
     rollId: 1,
   };
 }
 
 const clone = (s: GameState): GameState => structuredClone(s);
-const occupied = (s: GameState, cell: [number, number]) =>
-  s.dice.some((d) => d.cell && eq(d.cell, cell)) || s.robots.some((r) => eq(r.cell, cell));
+const occupied = (s: GameState, cell: Cell) => s.dice.some((d) => d.cell && eq(d.cell, cell)) || s.robots.some((r) => eq(r.cell, cell));
 
 /** Is this placement an excavator move (die on a not-yet-excavated space)? */
-export const isDigPlacement = (s: GameState, cell: [number, number]) => !isExcavated(s, cell);
+export const isDigPlacement = (s: GameState, cell: Cell) => !isExcavated(s, cell);
 
-export function canPlace(s: GameState, dieId: number, cell: [number, number]): string | null {
+export function canPlace(s: GameState, dieId: number, cell: Cell): string | null {
   if (s.phase !== "place") return "Not in placement phase";
   if (s.needsReroll) return "Reroll first";
   const die = s.dice.find((d) => d.id === dieId);
@@ -118,19 +100,23 @@ export function canPlace(s: GameState, dieId: number, cell: [number, number]): s
   if (occupied(s, cell)) return "Space occupied";
   if (s.dice.some((d) => d.cell && d.cell[1] === cell[1])) return "Column already has a die";
   if (isExcavated(s, cell)) {
-    if (!roomAt(cell)) return "Empty tunnel";
+    if (!roomAt(s, cell)) return "Empty tunnel";
     return null;
   }
-  // unexcavated space: only one per round, ahead of the excavator
-  if (routeIndex(cell) <= s.excavator) return "Excavator is here";
-  if (s.dice.some((d) => d.cell && isDigPlacement(s, d.cell))) return "Only one excavator die per round";
+  if (s.dice.some((d) => d.cell && d.cell[0] >= 0 && isDigPlacement(s, d.cell))) return "Only one excavator die per round";
+  if (routeIndex(s, cell) - s.excavator > die.value) return "Too far for the excavator";
   return null;
 }
 
+/** Undug route spaces this die could legally excavate to. */
+export function digTargets(s: GameState, dieId: number): Cell[] {
+  return board(s).route.filter((c) => isDigPlacement(s, c) && !canPlace(s, dieId, c));
+}
+
 /** Movement a die causes in its column (dig rooms reduce it by 1). */
-export function shipMove(s: GameState, die: { value: number }, cell: [number, number]) {
-  const r = roomAt(cell);
-  const usableDig = r?.kind === "dig" && isExcavated(s, cell);
+export function shipMove(s: GameState, die: { value: number }, cell: Cell) {
+  const r = roomAt(s, cell);
+  const usableDig = r?.parts[0] === "dig" && isExcavated(s, cell);
   return Math.max(0, die.value - (usableDig ? 1 : 0));
 }
 
@@ -138,12 +124,11 @@ function advanceMothership(s: GameState) {
   const old = s.mothership;
   s.mothership = old + 1;
   for (const sh of s.ships) {
-    if (sh.pos === old) {
-      sh.pos = null;
-    } else if (sh.pos === old - 1) sh.pos = old;
+    if (sh.pos === old) sh.pos = null;
+    else if (sh.pos === old - 1) sh.pos = old;
   }
   s.log.push(`Mothership descends to row ${s.mothership}.`);
-  if (s.mothership > SKULL_ROW) lose(s, "The mothership reached the skull.");
+  if (s.mothership > board(s).skullRow) lose(s, "The mothership reached the skull.");
 }
 
 function lose(s: GameState, why: string) {
@@ -161,6 +146,7 @@ function takeDamage(s: GameState) {
 /** Move all ships in a column by n spaces, resolving landing effects. */
 export function moveColumn(s: GameState, col: number, n: number) {
   if (n <= 0) return;
+  const sky = board(s).sky;
   const movers = s.ships.filter((sh) => sh.col === col && sh.pos !== null);
   for (const sh of movers) {
     if (sh.pos === null) continue;
@@ -171,20 +157,16 @@ export function moveColumn(s: GameState, col: number, n: number) {
       continue;
     }
     sh.pos = target;
-    const icon = SKY[target]![col];
+    const icon = target >= 0 ? sky[target]![col] : null;
     if (!icon) continue;
     if (icon.t === "L" || icon.t === "R") {
       const nc = col + (icon.t === "L" ? -1 : 1);
-      if (nc >= 0 && nc < COLS && !s.ships.some((o) => o.col === nc && o.pos === target)) {
-        sh.col = nc;
-      }
-    } else if (icon.t === "saucer") {
-      advanceMothership(s);
-    }
+      if (nc >= 0 && nc < COLS && !s.ships.some((o) => o.col === nc && o.pos === target)) sh.col = nc;
+    } else if (icon.t === "saucer") advanceMothership(s);
   }
 }
 
-export function placeDie(prev: GameState, dieId: number, cell: [number, number]): GameState {
+export function placeDie(prev: GameState, dieId: number, cell: Cell): GameState {
   const err = canPlace(prev, dieId, cell);
   if (err) throw new Error(err);
   const s = clone(prev);
@@ -196,6 +178,16 @@ export function placeDie(prev: GameState, dieId: number, cell: [number, number])
   if (s.phase !== "place") return s;
   const left = s.dice.filter((d) => !d.cell);
   if (die.color === "white" && left.length > 0) s.needsReroll = true;
+  return s;
+}
+
+/** Rebuild a state by replaying placements from a locked snapshot (used to rearrange dice before a reroll). */
+export function replay(base: GameState, placements: { dieId: number; cell: Cell }[]): GameState | null {
+  let s = base;
+  for (const p of placements) {
+    if (canPlace(s, p.dieId, p.cell)) return null;
+    s = placeDie(s, p.dieId, p.cell);
+  }
   return s;
 }
 
@@ -230,28 +222,28 @@ export function reroll(prev: GameState, rng: Rng = Math.random): GameState {
   return s;
 }
 
-/** Dice/robots sitting in a room, available for resolution. */
 export function roomContents(s: GameState, r: Room) {
   const dice = s.dice.filter((d) => d.cell && !d.resolved && r.cells.some((c) => eq(c, d.cell!)));
   const robots = s.robots.filter((rb) => !rb.used && !rb.fresh && r.cells.some((c) => eq(c, rb.cell)));
   return { dice, robots, full: dice.length + robots.length === r.cells.length };
 }
 
-export function researchAdvance(pos: number, value: number) {
+export function researchAdvance(pos: number, value: number, track: number[] = BOARDS.easy.research) {
   let p = pos;
   let sum = 0;
-  while (p + 1 < RESEARCH.length && sum + RESEARCH[p + 1]! <= value) {
-    sum += RESEARCH[p + 1]!;
+  while (p + 1 < track.length && sum + track[p + 1]! <= value) {
+    sum += track[p + 1]!;
     p++;
   }
   return p;
 }
 
 export function shootDown(s: GameState, value: number) {
+  const sky = board(s).sky;
   let n = 0;
   for (const sh of s.ships) {
     if (sh.pos === null || sh.pos < 0 || sh.pos >= DAMAGE_ROW) continue;
-    const icon = SKY[sh.pos]![sh.col];
+    const icon = sky[sh.pos]![sh.col];
     if (icon?.t === "exp" && icon.v <= value) {
       sh.pos = null;
       if (sh.color === "red") sh.destroyed = true;
@@ -261,11 +253,10 @@ export function shootDown(s: GameState, value: number) {
   return n;
 }
 
-/** Rooms/dice the player can currently resolve. */
 export function resolvables(s: GameState) {
   const out: { key: string; room?: Room; dieId?: number }[] = [];
-  for (const r of ROOMS) {
-    if (r.kind === "dig" || !roomUsable(s, r)) continue;
+  for (const r of board(s).rooms) {
+    if (r.parts[0] === "dig" || !roomUsable(s, r)) continue;
     const c = roomContents(s, r);
     if (c.dice.length + c.robots.length > 0) out.push({ key: r.id, room: r });
   }
@@ -273,9 +264,11 @@ export function resolvables(s: GameState) {
   return out;
 }
 
+const findRoom = (s: GameState, id: string) => board(s).rooms.find((x) => x.id === id)!;
+
 export function resolveRoom(prev: GameState, roomId: string, use: boolean): GameState {
   const s = clone(prev);
-  const r = ROOMS.find((x) => x.id === roomId)!;
+  const r = findRoom(s, roomId);
   const { dice, robots, full } = roomContents(s, r);
   const finish = () => {
     for (const d of dice) d.resolved = true;
@@ -294,8 +287,8 @@ export function resolveRoom(prev: GameState, roomId: string, use: boolean): Game
     if (rb.value <= 1) s.robots = s.robots.filter((x) => x.id !== rb.id);
     else rb.value -= 1;
   }
-  const kinds = r.kind === "energyFighter" ? (["energy", "fighter"] as const) : [r.kind];
-  for (const k of kinds) {
+  const track = board(s).research;
+  for (const k of r.parts) {
     if (value <= 0) break;
     if (k === "energy") {
       s.energy = Math.min(MAX_ENERGY, s.energy + value);
@@ -305,9 +298,9 @@ export function resolveRoom(prev: GameState, roomId: string, use: boolean): Game
       s.log.push(`Fighters (${value}) shot down ${n} ship${n === 1 ? "" : "s"}.`);
     } else if (k === "research") {
       const before = s.research;
-      s.research = researchAdvance(s.research, value);
+      s.research = researchAdvance(s.research, value, track);
       s.log.push(`Research (${value}) advanced ${s.research - before}.`);
-      if (s.research === RESEARCH.length - 1) {
+      if (s.research === track.length - 1) {
         s.phase = "won";
         s.endReason = "Your weapon destroyed the mothership!";
         s.log.push("VICTORY!");
@@ -315,7 +308,7 @@ export function resolveRoom(prev: GameState, roomId: string, use: boolean): Game
     } else if (k === "robot") {
       if (s.robots.length < 2) {
         s.pendingRobotValue = Math.min(6, value);
-        s.phase = "placeRobot";
+        if (s.phase !== "won") s.phase = "placeRobot";
       } else s.log.push("No robot dice left.");
     }
   }
@@ -323,27 +316,26 @@ export function resolveRoom(prev: GameState, roomId: string, use: boolean): Game
   return s;
 }
 
-/** Robot-only rooms can be skipped; robots stay with their value. */
 export function skipRobots(prev: GameState, roomId: string): GameState {
   const s = clone(prev);
-  const r = ROOMS.find((x) => x.id === roomId)!;
+  const r = findRoom(s, roomId);
   const { dice } = roomContents(s, r);
   for (const d of dice) d.resolved = true;
   s.robots.forEach((rb) => {
-    if (r.cells.some((c) => eq(c, rb.cell))) rb.fresh = true; // parked until next round
+    if (r.cells.some((c) => eq(c, rb.cell))) rb.fresh = true;
   });
   return s;
 }
 
-export function canPlaceRobot(s: GameState, cell: [number, number]) {
-  const r = roomAt(cell);
+export function canPlaceRobot(s: GameState, cell: Cell) {
+  const r = roomAt(s, cell);
   return !!r && roomUsable(s, r) && !s.robots.some((rb) => eq(rb.cell, cell)) && !s.dice.some((d) => d.cell && !d.resolved && eq(d.cell, cell));
 }
 
-export function placeRobot(prev: GameState, cell: [number, number] | null): GameState {
+export function placeRobot(prev: GameState, cell: Cell | null): GameState {
   const s = clone(prev);
   if (cell && canPlaceRobot(s, cell) && s.pendingRobotValue) {
-    s.robots.push({ id: Date.now() % 100000 + s.robots.length, value: s.pendingRobotValue, cell, used: false, fresh: true });
+    s.robots.push({ id: (Date.now() % 100000) + s.robots.length, value: s.pendingRobotValue, cell, used: false, fresh: true });
     s.log.push(`Robot (${s.pendingRobotValue}) built.`);
   }
   s.pendingRobotValue = null;
@@ -361,10 +353,10 @@ export function resolveDig(prev: GameState, dieId: number, use: boolean): GameSt
     return s;
   }
   s.energy -= 1;
-  const dist = routeIndex(d.cell) - s.excavator;
+  const dist = routeIndex(s, d.cell) - s.excavator;
   if (d.value >= dist) {
-    s.excavator = routeIndex(d.cell);
-    s.log.push(`Excavator dug ${dist} spaces.`);
+    s.excavator = routeIndex(s, d.cell);
+    s.log.push(`Excavator dug ${dist} space${dist === 1 ? "" : "s"}.`);
   } else s.log.push(`Excavator: die too low (needed ${dist}).`);
   return s;
 }
@@ -393,7 +385,7 @@ export function endRound(prev: GameState, rng: Rng = Math.random): GameState {
   const s = clone(prev);
   if (s.phase !== "resolve") return s;
   for (const d of s.dice) d.resolved = true;
-  const eff = MS_EFFECTS[s.mothership];
+  const eff = board(s).msEffects[s.mothership];
   if (eff) {
     if (eff.t === "damage") takeDamage(s);
     else if (eff.t === "exc") {
