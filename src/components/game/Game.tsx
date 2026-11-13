@@ -709,6 +709,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
   const [s, setS] = useState<GameState>(initial);
   const [lockBase, setLockBase] = useState<GameState>(initial);
   const recorded = useRef(false);
+  const rolled = useRef<{ roll: number; ids: Set<number> }>({ roll: -1, ids: new Set() });
   useEffect(() => {
     if (recorded.current || (s.phase !== "won" && s.phase !== "lost")) return;
     recorded.current = true;
@@ -803,6 +804,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     const c = ctx(dieId);
     const list = [...c.pre, ...c.post];
     const next = replay(lockBase, list);
+    rolled.current.ids.add(dieId);
     if (!next) {
       toast.error("Can't return that die while the white die depends on it.");
       return;
@@ -823,6 +825,8 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
   const undo = () => {
     if (!placements.length) return;
     const list = placements.slice(0, -1);
+    const last = placements.at(-1);
+    if (last) rolled.current.ids.add(last.dieId);
     setS(replay(lockBase, list) ?? lockBase);
     setPlacements(list);
     setPending(null);
@@ -940,9 +944,12 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
         {s.phase === "place" && (
           <>
-            <div className="flex justify-between gap-1.5" role="radiogroup" aria-label="Dice tray" data-tray>
-              {s.dice.map((d, i) => {
-                const placed = !!d.cell;
+            <div className="flex min-h-14 justify-center gap-3" role="radiogroup" aria-label="Dice tray" data-tray>
+              {s.dice.filter((d) => !d.cell).map((d, i) => {
+                const placed = false;
+                // Tumble only on a fresh roll; a die returned from the board just pops back in.
+                if (rolled.current.roll !== s.rollId) rolled.current = { roll: s.rollId, ids: new Set() };
+                const firstShow = !rolled.current.ids.has(d.id);
                 const canPick = placed ? placedIds.has(d.id) : !s.needsReroll;
                 return (
                   <button
@@ -959,7 +966,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
                       drag?.dieId === d.id && "opacity-20",
                     )}
                   >
-                    {placed ? <DieFace value={d.value} color={d.color} /> : <RollingDie value={d.value} color={d.color} delay={i} />}
+                    {firstShow ? <RollingDie value={d.value} color={d.color} delay={i} /> : <DieFace value={d.value} color={d.color} className="animate-pop" />}
                   </button>
                 );
               })}
