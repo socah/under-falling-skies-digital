@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BOARDS, composeBoard, setupLevel } from "./data";
 import {
   board,
   canPlace,
