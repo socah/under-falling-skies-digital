@@ -325,6 +325,7 @@ function Base({
   onDieDown: (dieId: number, e: RPointerEvent) => void;
   draggingId: number | null;
 }) {
+  const rAdv = useChange(s.research, (a, b) => b - a, 1800);
   const { look } = useContext(LookCtx);
   const b = board(s);
   const route = b.route;
@@ -353,6 +354,7 @@ function Base({
             className={cn(
               "flex flex-1 items-center justify-center rounded-[2px] border text-[9px] transition-colors duration-500",
               i < s.research ? "border-research bg-research text-primary-foreground" : "border-border text-muted-foreground",
+              rAdv && rAdv.d > 0 && i >= s.research - rAdv.d && i < s.research && "animate-glow-pulse",
               i === b.research.length - 2 && "border-research",
             )}
           >
