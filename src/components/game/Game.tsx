@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Lock, Menu, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { BASE_ROWS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, CARDS, normalizeSetup, setupLevel, type Difficulty, type MsEffect, type Room, type RoomPart } from "@/game/data";
@@ -97,7 +97,7 @@ function DieFace({ value, color, small, className }: { value: number; color: Die
 }
 
 /** Tumbles through random faces, then lands on the real value. */
-function RollingDie({ value, color, delay = 0, className }: { value: number; color: DieColor; delay?: number; className?: string }) {
+function RollingDie({ value, color, delay = 0, className, onDone }: { value: number; color: DieColor; delay?: number; className?: string; onDone?: () => void }) {
   const [shown, setShown] = useState(() => 1 + Math.floor(Math.random() * 6));
   const [rolling, setRolling] = useState(true);
   useEffect(() => {
@@ -109,6 +109,7 @@ function RollingDie({ value, color, delay = 0, className }: { value: number; col
         clearInterval(id);
         setShown(value);
         setRolling(false);
+        onDone?.();
       } else setShown(1 + Math.floor(Math.random() * 6));
     }, 70);
     return () => clearInterval(id);
@@ -202,7 +203,7 @@ function MsGlyph({ e }: { e: MsEffect | undefined }) {
   return <span className={cn(cls, "text-research")}>-{e.n}<FlaskConical className="size-3" /></span>;
 }
 
-function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; preview: GameState | null; focusCol: number | null }) {
+function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameState; preview: GameState | null; focusCol: number | null; onNew: (d: Difficulty) => void }) {
   const { look } = useContext(LookCtx);
   const booms = useBooms(s);
   const b = board(s);
@@ -219,12 +220,13 @@ function Sky({ s, from, preview, focusCol }: { s: GameState; from: GameState; pr
       style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.35)), url(${skyBg})` } : undefined}
       aria-label="Sky"
     >
-      <div className="relative w-8 shrink-0 border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
+      <div className="relative w-10 shrink-0 border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
         {b.msEffects.map((e, r) => (
           <div key={r} className="absolute inset-x-0 flex items-center justify-center border-t border-border/30" style={{ top: (r + 1) * ROW_H, height: ROW_H }}>
-            <MsGlyph e={e} />
+            {e && <MsGlyph e={e} />}
           </div>
         ))}
+        <SideStats s={s} onNew={onNew} free={[-1, ...b.msEffects.flatMap((e, r) => (e ? [] : [r]))]} />
         <div className="absolute -right-1.5 z-20 flex items-center text-research glow transition-all duration-700" style={{ top: (s.mothership + 1) * ROW_H, height: ROW_H }}>
           ▶
         </div>
@@ -462,9 +464,10 @@ function Base({
                 {die && die.cell![0] >= 0 && (
                   <span
                     onPointerDown={canMove ? (e) => onDieDown(die.id, e) : undefined}
+                    data-die={die.id}
                     className={cn("relative", canMove && "cursor-grab touch-none", draggingId === die.id && "opacity-30")}
                   >
-                    <DieFace small value={die.value} color={die.color} className={cn("animate-dice-land", die.resolved && "opacity-25")} />
+                    <DieFace small value={die.value} color={die.color} className={cn(die.resolved && "opacity-25")} />
                     {!canMove && s.phase === "place" && <Lock className="absolute -right-1 -top-1 size-3 text-muted-foreground" />}
                   </span>
                 )}
@@ -490,41 +493,43 @@ function Base({
 }
 
 /* ---------- header & menus ---------- */
-function Header({ s, onNew }: { s: GameState; onNew: (d: Difficulty) => void }) {
-  const b = board(s);
+/** Hull, energy, round and menu, tucked into the free rows of the mothership-effect column. */
+function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) => void; free: number[] }) {
   const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
   const dE = useChange(s.energy, (a, b) => b - a);
   const hit = useChange(s.damage, (a, b) => (b > a ? b - a : null), 500);
+  const items: ReactNode[] = [
+    <GameMenu key="m" current={s.difficulty} onNew={onNew} />,
+    <span key="h" title={`Hull ${MAX_DAMAGE - s.damage}/${MAX_DAMAGE}`} aria-label="Hull" className={cn("flex gap-px rounded-sm px-0.5", hit && "animate-hit")}>
+      {Array.from({ length: MAX_DAMAGE }, (_, i) => (
+        <span key={i} className={cn("h-3 w-1 rounded-[1px]", i < MAX_DAMAGE - s.damage ? "bg-research" : "bg-threat/40")} />
+      ))}
+    </span>,
+    <span key="e" aria-label="Energy" className="relative flex items-center font-display text-xs font-bold text-energy glow">
+      <Zap className="size-3" />{s.energy}
+      {dE && (
+        <span key={dE.k} className={cn("pointer-events-none absolute left-full animate-float-up text-xs", dE.d > 0 ? "text-energy" : "text-threat")}>
+          {dE.d > 0 ? `+${dE.d}` : dE.d}
+        </span>
+      )}
+    </span>,
+    gain > 0 ? <span key="g" className="text-[10px] font-bold text-research" title="Energy gained this turn">+{gain}</span> : null,
+    <span key="r" className="text-[9px] text-muted-foreground" title={`Level ${setupLevel(s.difficulty)}`}>R{s.round}</span>,
+  ];
+  let k = 0;
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background/90 px-3 py-2 backdrop-blur">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <h1 className="text-sm font-bold tracking-[0.2em] text-research glow">UNDER FALLING SKIES</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">
-            LVL {setupLevel(s.difficulty)} · RND {s.round}
-          </span>
-          <GameMenu current={s.difficulty} onNew={onNew} />
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-1.5 text-[10px] uppercase">
-        <Stat label="Hull" tone="text-threat" className={hit ? "animate-hit" : undefined} key={hit?.k ?? "h"}>
-          <span className="flex gap-0.5">
-            {Array.from({ length: MAX_DAMAGE }, (_, i) => (
-              <span key={i} className={cn("h-2.5 w-1.5 rounded-[1px]", i < MAX_DAMAGE - s.damage ? "bg-research" : "bg-threat/30")} />
-            ))}
-          </span>
-        </Stat>
-        <Stat label="Energy" tone="text-energy">
-          {s.energy}/{MAX_ENERGY}
-          {gain > 0 && <span className="ml-1.5 text-[11px] text-research">+{gain} this turn</span>}
-          {dE && (
-            <span key={dE.k} className={cn("pointer-events-none absolute right-2 animate-float-up text-base", dE.d > 0 ? "text-energy" : "text-threat")}>
-              {dE.d > 0 ? `+${dE.d}` : dE.d}⚡
-            </span>
-          )}
-        </Stat>
-      </div>
-    </header>
+    <>
+      {items.map((it) => {
+        if (!it) return null;
+        const r = free[k++];
+        if (r === undefined) return null;
+        return (
+          <div key={(it as { key: string }).key} className="absolute inset-x-0 z-30 flex items-center justify-center" style={{ top: (r + 1) * ROW_H, height: ROW_H }}>
+            {it}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -548,8 +553,8 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
   return (
     <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (o) { setD(normalizeSetup(current)); setStats(loadStats()); } }}>
       <SheetTrigger asChild>
-        <button type="button" aria-label="Menu" className="rounded-sm border border-border p-1 text-muted-foreground hover:text-foreground">
-          <Menu className="size-4" />
+        <button type="button" aria-label="Menu" className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground">
+          <Menu className="size-3.5" />
         </button>
       </SheetTrigger>
       <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto border-border bg-card font-mono">
@@ -633,14 +638,6 @@ function LookPicker() {
   );
 }
 
-function Stat({ label, tone, children, className }: { label: string; tone: string; children: ReactNode; className?: string | undefined }) {
-  return (
-    <div className={cn("relative rounded-sm border border-border bg-card/70 px-1.5 py-1", className)}>
-      <div className="text-muted-foreground">{label}</div>
-      <div className={cn("flex h-5 items-center font-display text-sm font-bold glow", tone)}>{children}</div>
-    </div>
-  );
-}
 
 function roomValue(s: GameState, r: Room) {
   const { dice, robots } = roomContents(s, r);
@@ -729,6 +726,28 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     return () => clearTimeout(t);
   }, [exc, s.excavator]);
 
+  // FLIP: remember where every die sits before a move, then glide it from there.
+  const flip = useRef<Map<number, DOMRect> | null>(null);
+  const snap = (dieId?: number, at?: { x: number; y: number }) => {
+    const m = new Map<number, DOMRect>();
+    document.querySelectorAll<HTMLElement>("[data-die]").forEach((el) => m.set(Number(el.dataset["die"]), el.getBoundingClientRect()));
+    if (dieId !== undefined && at) m.set(dieId, new DOMRect(at.x - 14, at.y - 14, 28, 28));
+    flip.current = m;
+  };
+  useLayoutEffect(() => {
+    const prev = flip.current;
+    if (!prev) return;
+    flip.current = null;
+    document.querySelectorAll<HTMLElement>("[data-die]").forEach((el) => {
+      const p = prev.get(Number(el.dataset["die"]));
+      if (!p) return;
+      const r = el.getBoundingClientRect();
+      const dx = p.left + p.width / 2 - (r.left + r.width / 2);
+      const dy = p.top + p.height / 2 - (r.top + r.height / 2);
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], { duration: 320, easing: "cubic-bezier(.2,.8,.2,1)" });
+    });
+  });
   const fresh = (next: GameState) => {
     setS(next);
     setLockBase(next);
@@ -776,7 +795,8 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     return false;
   };
 
-  const commitDie = (dieId: number, cell: Cell) => {
+  const commitDie = (dieId: number, cell: Cell, at?: { x: number; y: number }) => {
+    snap(dieId, at);
     const c = ctx(dieId);
     const list = [...c.pre, { dieId, cell }, ...c.post];
     const next = replay(lockBase, list);
@@ -800,7 +820,8 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     setHover(null);
   };
 
-  const returnDie = (dieId: number) => {
+  const returnDie = (dieId: number, at?: { x: number; y: number }) => {
+    snap(dieId, at);
     const c = ctx(dieId);
     const list = [...c.pre, ...c.post];
     const next = replay(lockBase, list);
@@ -824,6 +845,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
   const undo = () => {
     if (!placements.length) return;
+    snap();
     const list = placements.slice(0, -1);
     const last = placements.at(-1);
     if (last) rolled.current.ids.add(last.dieId);
@@ -846,9 +868,11 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     let moved = false;
     let target: Cell | null = null;
     let overTray = false;
+    let at = { x: x0, y: y0 };
     const move = (ev: PointerEvent) => {
       if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
       moved = true;
+      at = { x: ev.clientX, y: ev.clientY };
       setDrag({ dieId, x: ev.clientX, y: ev.clientY });
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const cellEl = el?.closest("[data-cell]") as HTMLElement | null;
@@ -864,8 +888,8 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
       setDrag(null);
       setHover(null);
       if (!moved) return;
-      if (target) latest.current.commitDie(dieId, target);
-      else if (overTray && placedIds.has(dieId)) latest.current.returnDie(dieId);
+      if (target) latest.current.commitDie(dieId, target, at);
+      else if (overTray && placedIds.has(dieId)) latest.current.returnDie(dieId, at);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -881,9 +905,8 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col overflow-x-hidden">
-      <Header s={s} onNew={onNew} />
       <main className="flex flex-1 flex-col gap-2 px-2 pb-56 pt-2">
-        <Sky s={s} from={selBase} preview={preview} focusCol={focusCol} />
+        <Sky s={s} from={selBase} preview={preview} focusCol={focusCol} onNew={onNew} />
         <Base
           s={s}
           exc={exc}
@@ -955,6 +978,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
                   <button
                     key={placed ? `${d.id}-p` : `${d.id}-${s.rollId}`}
                     type="button"
+                    data-die={d.id}
                     disabled={!canPick}
                     onPointerDown={(e) => canPick && startDrag(d.id, e)}
                     aria-label={`${d.color} die ${d.value}${placed ? " (placed)" : ""}`}
@@ -966,7 +990,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
                       drag?.dieId === d.id && "opacity-20",
                     )}
                   >
-                    {firstShow ? <RollingDie value={d.value} color={d.color} delay={i} /> : <DieFace value={d.value} color={d.color} className="animate-pop" />}
+                    {firstShow ? <RollingDie value={d.value} color={d.color} delay={i} onDone={() => rolled.current.ids.add(d.id)} /> : <DieFace value={d.value} color={d.color} />}
                   </button>
                 );
               })}
