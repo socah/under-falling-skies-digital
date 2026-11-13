@@ -168,3 +168,19 @@
 @utility animate-dice-roll { animation: dice-roll 0.5s cubic-bezier(.3,1.4,.6,1); }
 @keyframes ghost-pulse { 50% { opacity: 0.25; } }
 @utility animate-ghost { animation: ghost-pulse 1s ease-in-out infinite; }
+@keyframes dice-tumble {
+  0% { transform: translateY(-16px) rotate(0deg) scale(0.9); }
+  25% { transform: translateY(0) rotate(95deg) scale(1.05); }
+  50% { transform: translateY(-9px) rotate(190deg) scale(0.95); }
+  75% { transform: translateY(0) rotate(280deg) scale(1.05); }
+  100% { transform: translateY(-4px) rotate(360deg) scale(1); }
+}
+@utility animate-dice-tumble { animation: dice-tumble 0.28s linear infinite; }
+@keyframes dice-land { 0% { transform: scale(1.18) rotate(-6deg); } 55% { transform: scale(0.94) rotate(2deg); } 100% { transform: scale(1) rotate(0); } }
+@utility animate-dice-land { animation: dice-land 0.3s ease-out; }
+@keyframes dig-shake { 0%,100% { transform: rotate(0) translateY(0); } 25% { transform: rotate(-14deg) translateY(1px); } 75% { transform: rotate(12deg) translateY(-1px); } }
+@utility animate-dig { animation: dig-shake 0.18s linear infinite; }
+@keyframes route-flow { to { stroke-dashoffset: -12; } }
+@utility animate-route { animation: route-flow 0.6s linear infinite; }
+@keyframes dug-flash { 0% { background-color: color-mix(in oklab, var(--research) 55%, transparent); } 100% { background-color: transparent; } }
+@utility animate-dug { animation: dug-flash 0.9s ease-out; }

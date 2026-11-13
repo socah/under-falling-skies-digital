@@ -185,6 +185,10 @@ export function placeDie(prev: GameState, dieId: number, cell: Cell): GameState 
 export function replay(base: GameState, placements: { dieId: number; cell: Cell }[]): GameState | null {
   let s = base;
   for (const p of placements) {
+    if (p.cell[0] < 0) {
+      s = discardDie(s, p.dieId);
+      continue;
+    }
     if (canPlace(s, p.dieId, p.cell)) return null;
     s = placeDie(s, p.dieId, p.cell);
   }
