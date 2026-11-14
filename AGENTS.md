@@ -14,3 +14,4 @@
 - Dice placements in a round are stored as a list replayed from the last reroll snapshot (`replay`), so dice can be moved/returned before a reroll without special undo logic.
 - Past-game stats are kept per card-setup code in localStorage (`src/game/stats.ts`); no backend, so they stay on the device.
 - Sky and base use the same two-column grid with an identical sidebar width so all five gameplay columns align.
+- Excavation rendering uses the same route boundary as engine occupancy, with ground texture applied per undug cell rather than to the whole base; keeps track and cleared spaces clean.

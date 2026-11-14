@@ -341,17 +341,16 @@ function Base({
   const prevExc = useRef(exc);
   const justDug = useRef(new Set<string>());
   if (exc !== prevExc.current) {
-    if (exc > prevExc.current) justDug.current = new Set(route.slice(prevExc.current + 1, exc + 1).map(key));
+    if (exc > prevExc.current) justDug.current = new Set(route.slice(prevExc.current, exc).map(key));
     prevExc.current = exc;
   }
   const slots: Cell[] = [...b.rooms.flatMap((r) => r.cells), ...emptyRoute];
-  const excCell = route[exc]!;
+  const excCell = route[exc] ?? route[0];
 
   return (
     <section
       aria-label="Underground base"
-      className="grid grid-cols-[2.5rem_minmax(0,1fr)] rounded-md border border-border bg-card/60 bg-cover"
-      style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)), url(${baseBg})` } : undefined}
+      className="grid grid-cols-[2.5rem_minmax(0,1fr)] rounded-md border border-border bg-card"
     >
       <div className="flex flex-col-reverse items-stretch gap-0.5 border-r border-border/60 px-1 py-1" aria-label="Research track">
         {b.research.slice(1).map((v, i) => (
@@ -370,6 +369,9 @@ function Base({
         <FlaskConical className="mx-auto size-3 shrink-0 text-research" />
       </div>
       <div className="relative flex-1" style={{ height: BASE_ROWS * CELL_H }}>
+        {look === "illustrated" && route.filter((c) => !isExcavated(s, c)).map((c) => (
+          <div key={`ground-${key(c)}`} className="pointer-events-none absolute bg-cover opacity-55" style={{ ...cellBox(c), backgroundImage: `url(${baseBg})` }} />
+        ))}
         {/* dug tunnels (empty, on the route) */}
         {emptyRoute.map((c) =>
           isExcavated(s, c) ? (
@@ -428,9 +430,11 @@ function Base({
         <svg className="pointer-events-none absolute inset-0 z-10 size-full overflow-visible" aria-hidden>
           {route.slice(1).map((c, j) => {
             const i = j + 1;
-            const a = center(route[i - 1]!);
+            if (i <= exc) return null;
+            const previous = route[i - 1];
+            if (!previous) return null;
+            const a = center(previous);
             const z = center(c);
-            const dug = i <= exc;
             const reachable = reach !== null && i > exc && i <= reach;
             return (
               <line
@@ -440,13 +444,13 @@ function Base({
                 x2={z.x}
                 y2={z.y}
                 strokeLinecap="round"
-                strokeWidth={dug ? 3 : reachable ? 4 : 2}
+                strokeWidth={reachable ? 4 : 2}
                 className={cn(
                   "transition-all duration-300",
-                  dug ? "stroke-research/70" : reachable ? "animate-route stroke-energy" : "stroke-muted-foreground/25",
-                  reach !== null && !dug && !reachable && "opacity-25",
+                  reachable ? "animate-route stroke-energy" : "stroke-muted-foreground/25",
+                  reach !== null && !reachable && "opacity-25",
                 )}
-                style={dug ? undefined : { filter: reachable ? "drop-shadow(0 0 3px var(--energy))" : undefined }}
+                style={{ filter: reachable ? "drop-shadow(0 0 3px var(--energy))" : undefined }}
               />
             );
           })}
@@ -491,32 +495,26 @@ function Base({
           );
         })}
         {/* excavator token */}
-        <div
-          className="pointer-events-none absolute z-30 transition-all duration-300 ease-linear"
-          style={{ left: `calc(${excCell[1] * 20}% + 3px)`, top: excCell[0] * CELL_H + CELL_H - 23 }}
+        {excCell && <div
+          className="pointer-events-none absolute z-30 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-linear"
+          style={{ left: `${(excCell[1] + 0.5) * 20}%`, top: (excCell[0] + 0.5) * CELL_H }}
           aria-label="Excavator"
         >
-          <span className="relative flex size-5 items-center justify-center rounded-full border border-research bg-background text-research box-glow">
-            <Pickaxe className={cn("size-3.5", digging && "animate-dig")} />
+          <span className="relative flex size-8 items-center justify-center rounded-full border border-research bg-background text-research box-glow">
+            <Pickaxe className={cn("size-5", digging && "animate-dig")} />
             {digging && <span className="absolute inset-0 animate-ping rounded-full bg-warn/60" />}
           </span>
-        </div>
+        </div>}
       </div>
     </section>
   );
 }
 
 /* ---------- header & menus ---------- */
-/** Hull, energy, round and menu, tucked into the free rows of the mothership-effect column. */
+/** Round and menu tucked into the free rows of the mothership-effect column. */
 function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) => void; free: number[] }) {
-  const hit = useChange(s.damage, (a, b) => (b > a ? b - a : null), 500);
   const items: ReactNode[] = [
     <GameMenu key="m" current={s.difficulty} onNew={onNew} log={s.log} />,
-    <span key="h" title={`Hull ${MAX_DAMAGE - s.damage}/${MAX_DAMAGE}`} aria-label="Hull" className={cn("flex gap-px rounded-sm px-0.5", hit && "animate-hit")}>
-      {Array.from({ length: MAX_DAMAGE }, (_, i) => (
-        <span key={i} className={cn("h-3 w-1 rounded-[1px]", i < MAX_DAMAGE - s.damage ? "bg-research" : "bg-threat/40")} />
-      ))}
-    </span>,
     <span key="r" className="text-[9px] text-muted-foreground" title={`Level ${setupLevel(s.difficulty)}`}>R{s.round}</span>,
   ];
   let k = 0;
@@ -533,6 +531,17 @@ function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) =>
         );
       })}
     </>
+  );
+}
+
+function HullTrack({ damage }: { damage: number }) {
+  const hit = useChange(damage, (a, b) => (b > a ? b - a : null), 500);
+  return (
+    <span title={`Hull ${MAX_DAMAGE - damage}/${MAX_DAMAGE}`} aria-label={`Hull ${MAX_DAMAGE - damage} of ${MAX_DAMAGE}`} className={cn("flex shrink-0 items-center gap-1", hit && "animate-hit")}>
+      {Array.from({ length: MAX_DAMAGE }, (_, i) => (
+        <span key={i} className={cn("h-4 w-2 rounded-[2px] border", i < MAX_DAMAGE - damage ? "border-research bg-research" : "border-threat/50 bg-threat/20")} />
+      ))}
+    </span>
   );
 }
 
@@ -689,9 +698,9 @@ function RulesSheet() {
           <SheetTitle className="font-display text-research">Quick reference</SheetTitle>
         </SheetHeader>
         <div className="space-y-3 px-4 pb-6 text-muted-foreground">
-          <p><b className="text-foreground">1 · Place dice.</b> Roll 3 grey + 2 white. Tap or drag a die onto a space; max one die per column. Ships in that column descend by the die value. Placing a white die forces a reroll of the unplaced dice. Until you reroll, you can drag placed dice to other spaces or back to the tray.</p>
+          <p><b className="text-foreground">1 · Place dice.</b> Roll 3 white + 2 dark. Tap or drag a die onto a space; max one die per column. Ships in that column descend by the die value. Placing a dark die forces a reroll of the unplaced dice. Until you reroll, you can drag placed dice to other spaces or back to the tray.</p>
           <p><b className="text-foreground">Sky icons.</b> ◀ ▶ shift the ship sideways if the space is free. Saucer: the mothership descends a row. Explosion N+: fighters with value ≥ N can shoot ships there. Reaching the city = 1 damage.</p>
-          <p><b className="text-foreground">Excavator.</b> Follow the dashed path; numbers show the distance. One die per round may go on an undug space no further than its value. At resolve, pay 1 energy to dig there.</p>
+          <p><b className="text-foreground">Excavator.</b> One die per round may go on an undug space beyond the excavator, no further than its value. At resolve, pay 1 energy to move there. Only spaces behind the excavator are excavated; its current space is occupied and does not unlock a room.</p>
           <p><b className="text-foreground">2 · Resolve rooms</b> in any order. Pay the bolts shown. Value = sum of dice + modifier. Multi-space rooms need every space filled.</p>
           <ul className="list-inside list-disc space-y-1">
             <li><span className="text-room-energy">Generator</span>: +value energy (max 7).</li>
@@ -788,13 +797,13 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
   const placedIds = new Set(placements.filter((p) => p.cell[0] >= 0).map((p) => p.dieId));
   const movable = (dieId: number) => s.phase === "place" && placedIds.has(dieId);
 
-  /** State to evaluate a die against: without it (if it's being moved) and before any trailing white die. */
+  /** State to evaluate a die against: without it (if it's being moved) and before any trailing dark die. */
   const ctx = (dieId: number) => {
     if (!placedIds.has(dieId)) return { base: s as GameState | null, pre: placements, post: [] as Placement[] };
     let pre = placements.filter((p) => p.dieId !== dieId);
     let post: Placement[] = [];
     const last = pre.at(-1);
-    if (last && s.dice.find((d) => d.id === last.dieId)?.color === "white") {
+    if (last && s.dice.find((d) => d.id === last.dieId)?.color === "grey") {
       post = [last];
       pre = pre.slice(0, -1);
     }
@@ -832,11 +841,11 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     const list = [...c.pre, { dieId, cell }, ...c.post];
     const next = replay(lockBase, list);
     if (!next) {
-      toast.error("That move would break the white die's placement.");
+      toast.error("That move would break the dark die's placement.");
       return;
     }
     if (next.needsReroll && next.dice.some((d) => !d.cell)) {
-      // White die placed with dice left: lock everything and reroll the rest right away.
+      // Dark die placed with dice left: lock everything and reroll the rest right away.
       fresh(reroll(next));
       setSel(null);
       setHover(null);
@@ -855,7 +864,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     const next = replay(lockBase, list);
     rolled.current.ids.add(dieId);
     if (!next) {
-      toast.error("Can't return that die while the white die depends on it.");
+      toast.error("Can't return that die while the dark die depends on it.");
       return;
     }
     setS(next);
@@ -958,8 +967,9 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
       )}
 
       <footer className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-border bg-background/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 backdrop-blur">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <HullTrack damage={s.damage} />
+          <span className="min-w-0 flex-1 text-[10px] uppercase text-muted-foreground">
             {s.phase === "place" &&
               (selPlaced
                     ? "Move this die, or drag it to the tray"
@@ -970,7 +980,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
             {s.phase === "placeRobot" && `Place robot (${s.pendingRobotValue})`}
             {(s.phase === "won" || s.phase === "lost") && "Game over"}
           </span>
-          <div className="flex gap-1.5">
+          <div className="flex shrink-0 gap-1.5">
             <RulesSheet />
             {s.phase === "place" && (
               <button type="button" onClick={undo} disabled={!placements.length} className="flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs disabled:opacity-30">
