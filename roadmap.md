@@ -1,4 +1,4 @@
-- [ ] Keep completed excavation paths and textures hidden; center the excavator.
-- [ ] Keep the excavator's current space blocked and rooms locked until it moves past.
-- [ ] Use white ordinary dice and dark reroll dice.
-- [ ] Move hull health to the bottom controls and verify gameplay.
+- [x] Keep completed excavation paths and textures hidden; center the excavator.
+- [x] Keep the excavator's current space blocked and rooms locked until it moves past.
+- [x] Use white ordinary dice and dark reroll dice.
+- [x] Move hull health to the bottom controls and verify gameplay.
