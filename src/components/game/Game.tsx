@@ -254,7 +254,7 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
             <span key={c} className="text-threat glow">✸</span>
           ))}
         </div>
-        <div className="absolute inset-x-0 top-0 z-10 rounded-b-[40%] mothership-hull transition-[height] duration-700 ease-out" style={{ height: (s.mothership + 1) * ROW_H }}>
+        <div className="absolute inset-x-0 top-0 z-10 mothership-hull transition-[height] duration-700 ease-out" style={{ height: (s.mothership + 1) * ROW_H, borderRadius: "0 0 40% 40% / 0 0 10px 10px" }}>
           <div className="absolute inset-x-0 bottom-0 flex" style={{ height: ROW_H }}>
             {Array.from({ length: COLS }, (_, c) => (
               <div key={c} className="flex flex-1 items-center justify-center">
