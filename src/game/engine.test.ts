@@ -5,6 +5,8 @@ import {
   pendingEnergy,
   canPlace,
   isExcavated,
+  roomUsable,
+  canPlaceRobot,
   replay,
   endRound,
   newGame,
@@ -43,8 +45,9 @@ describe("dice placement", () => {
     expect(s.ships.find((x) => x.id === 0)!.pos).toBe(-1);
   });
 
-  it("placing a white die forces a reroll of remaining dice", () => {
+  it("placing a dark die forces a reroll of remaining dice", () => {
     let s = game();
+    expect(s.dice[3]?.color).toBe("grey");
     s = placeDie(s, 3, [1, 0]);
     expect(s.needsReroll).toBe(true);
     expect(canPlace(s, 0, [1, 1])).toBe("Reroll first");
@@ -135,11 +138,29 @@ describe("excavator limits", () => {
     expect(canPlace(s, 0, [3, 1])).toBe("Too far for the excavator"); // distance 4
     expect(canPlace(s, 0, [3, 2])).toBe(null); // distance 3
   });
-  it("the dug space becomes usable right away", () => {
+  it("the excavator's destination stays unexcavated and its room stays locked", () => {
     let s = game();
     s = placeDie(s, 0, [3, 4]);
     s = resolveDig(s, 0, true);
+    expect(isExcavated(s, [3, 4])).toBe(false);
+    const room = board(s).rooms.find((r) => r.id === "R3d");
+    expect(room && roomUsable(s, room)).toBe(false);
+    expect(canPlaceRobot(s, [3, 4])).toBe(false);
+    s.dice = s.dice.map((d) => ({ ...d, cell: null }));
+    expect(canPlace(s, 0, [3, 4])).toBe("Excavator occupies this space");
+    s.excavator = 2;
     expect(isExcavated(s, [3, 4])).toBe(true);
+    expect(room && roomUsable(s, room)).toBe(true);
+  });
+  it("the starting excavator space is occupied, not excavated", () => {
+    const s = game();
+    expect(isExcavated(s, [2, 4])).toBe(false);
+    expect(canPlace(s, 0, [2, 4])).toBe("Excavator occupies this space");
+  });
+  it("ordinary dice are white and do not cause rerolls", () => {
+    const s = game();
+    expect(s.dice.slice(0, 3).map((d) => d.color)).toEqual(["white", "white", "white"]);
+    expect(placeDie(s, 0, [1, 0]).needsReroll).toBe(false);
   });
 });
 

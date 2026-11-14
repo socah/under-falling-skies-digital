@@ -51,14 +51,14 @@ export const routeIndex = (s: GameState, cell: Cell) => board(s).route.findIndex
 
 export function isExcavated(s: GameState, cell: Cell) {
   const i = routeIndex(s, cell);
-  return i === -1 ? true : i <= s.excavator;
+  return i === -1 ? true : i < s.excavator;
 }
 export function roomUsable(s: GameState, r: Room) {
   return r.cells.every((c) => isExcavated(s, c));
 }
 
 function newDice(rng: Rng): Die[] {
-  return [0, 1, 2, 3, 4].map((i) => ({ id: i, color: i < 3 ? "grey" : "white", value: roll(rng), cell: null, resolved: false }));
+  return [0, 1, 2, 3, 4].map((i) => ({ id: i, color: i < 3 ? "white" : "grey", value: roll(rng), cell: null, resolved: false }));
 }
 
 export function newGame(rng: Rng = Math.random, difficulty: Difficulty = "easy"): GameState {
@@ -98,6 +98,7 @@ export function canPlace(s: GameState, dieId: number, cell: Cell): string | null
   if (s.needsReroll) return "Reroll first";
   const die = s.dice.find((d) => d.id === dieId);
   if (!die || die.cell) return "Die unavailable";
+  if (routeIndex(s, cell) === s.excavator) return "Excavator occupies this space";
   if (occupied(s, cell)) return "Space occupied";
   if (s.dice.some((d) => d.cell && d.cell[1] === cell[1])) return "Column already has a die";
   if (isExcavated(s, cell)) {
@@ -178,7 +179,7 @@ export function placeDie(prev: GameState, dieId: number, cell: Cell): GameState 
   s.log.push(`Placed ${die.color} ${die.value} in column ${cell[1] + 1}; ships move ${n}.`);
   if (s.phase !== "place") return s;
   const left = s.dice.filter((d) => !d.cell);
-  if (die.color === "white" && left.length > 0) s.needsReroll = true;
+  if (die.color === "grey" && left.length > 0) s.needsReroll = true;
   return s;
 }
 
