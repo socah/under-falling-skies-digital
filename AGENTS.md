@@ -13,3 +13,4 @@
 - New games are created client-side after mount, because random dice during SSR cause hydration mismatches.
 - Dice placements in a round are stored as a list replayed from the last reroll snapshot (`replay`), so dice can be moved/returned before a reroll without special undo logic.
 - Past-game stats are kept per card-setup code in localStorage (`src/game/stats.ts`); no backend, so they stay on the device.
+- Sky and base use the same two-column grid with an identical sidebar width so all five gameplay columns align.
