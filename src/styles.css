@@ -116,7 +116,7 @@
   --room-energy: oklch(0.85 0.16 95);
   --room-robot: oklch(0.65 0.15 245);
   --room-fighter: oklch(0.72 0.19 50);
-  --room-research: oklch(0.76 0.13 185);
+  --room-research: var(--research);
   --sky-top: oklch(0.16 0.03 260);
   --sky-bottom: oklch(0.3 0.08 45);
   --mothership: oklch(0.24 0.05 175);
