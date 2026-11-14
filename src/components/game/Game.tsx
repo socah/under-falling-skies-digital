@@ -218,7 +218,7 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
         return p.pos !== null && (p.pos !== o.pos || p.col !== o.col);
       })
     : [];
-  const shipStyle = (pos: number, col: number) => ({ top: (pos + 1) * ROW_H + 3, left: `calc(${col * 20}% + 10% - 12px)` });
+  const shipStyle = (pos: number, col: number) => ({ top: (pos + 1) * ROW_H, height: ROW_H, left: `calc(${col * 20}% + 10% - 12px)` });
   return (
     <section
       className={cn("relative grid grid-cols-[2.5rem_minmax(0,1fr)] rounded-md border border-border bg-cover bg-center", look === "abstract" && "sky-gradient")}
@@ -264,16 +264,17 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
           </div>
         </div>
         {s.ships.map((sh) => {
-          const ic = sh.pos === null ? null : b.sky[sh.pos]?.[sh.col];
+          if (sh.pos === null) return null;
+          const ic = b.sky[sh.pos]?.[sh.col];
           return ic?.t === "exp" ? (
-            <span key={`t${sh.id}`} className="absolute z-30 rounded-sm bg-warn px-0.5 text-[8px] font-bold leading-tight text-background transition-all duration-500" style={{ top: (sh.pos! + 1) * ROW_H, left: `calc(${sh.col * 20}% + 10% + 6px)` }}>
+            <span key={`t${sh.id}`} aria-label={`Shooting threshold ${ic.v}`} className="absolute z-30 -translate-y-1/2 rounded-sm border border-background bg-warn px-0.5 text-[10px] font-bold leading-tight text-background transition-all duration-500" style={{ top: (sh.pos + 1.5) * ROW_H, left: `calc(${sh.col * 20}% + 10% + 10px)` }}>
               {ic.v}+
             </span>
           ) : null;
         })}
         {s.ships.map((sh) =>
           sh.pos === null ? null : (
-            <div key={sh.id} className="absolute z-20 transition-all duration-500 ease-out" style={shipStyle(sh.pos, sh.col)}>
+            <div key={sh.id} data-ship-row={sh.pos} className="absolute z-20 flex items-center transition-all duration-500 ease-out" style={shipStyle(sh.pos, sh.col)}>
               <EnemyShip red={sh.color === "red"} />
             </div>
           ),
@@ -286,8 +287,8 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
             <div className="absolute z-30 size-7 animate-boom rounded-full bg-[radial-gradient(circle,var(--warn),var(--threat)_55%,transparent_70%)]" style={{ top: (x.pos + 1) * ROW_H - 3, left: `calc(${x.col * 20}% + 10% - 14px)` }} />
           </div>
         ))}
-        {ghosts.map((sh) => (
-          <div key={`g${sh.id}`} className="absolute z-20" style={shipStyle(sh.pos!, sh.col)}>
+        {ghosts.map((sh) => sh.pos === null ? null : (
+          <div key={`g${sh.id}`} className="absolute z-20 flex items-center" style={shipStyle(sh.pos, sh.col)}>
             <EnemyShip red={sh.color === "red"} ghost />
           </div>
         ))}
