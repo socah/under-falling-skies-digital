@@ -167,7 +167,7 @@ function EnemyShip({ red, ghost }: { red?: boolean; ghost?: boolean }) {
         alt=""
         width={24}
         height={24}
-        className={cn("size-6 rotate-180", ghost && "animate-ghost opacity-60")}
+        className={cn("size-6", ghost && "animate-ghost opacity-60")}
         style={{ filter: `${red ? "hue-rotate(250deg) saturate(2) " : ""}drop-shadow(0 0 3px ${red ? "var(--threat)" : "var(--research)"})` }}
       />
     );
@@ -400,7 +400,7 @@ function Base({
                   dimmed && "opacity-50",
                 )}
               >
-                {look === "illustrated" && (
+                {look === "illustrated" && usable && (
                   <span className="pointer-events-none absolute inset-0 flex overflow-hidden rounded-[1px] opacity-60">
                     {r.parts.map((p) => PX[p] && <img key={p} src={PX[p]} alt="" className="h-full min-w-0 flex-1 object-cover [image-rendering:pixelated]" />)}
                   </span>
