@@ -26,7 +26,6 @@ import {
   pendingEnergy,
   roomUsable,
   routeIndex,
-  shipMove,
   skipRobots,
   startResolve,
   type Cell,
@@ -314,7 +313,6 @@ function Base({
   reach,
   onCell,
   onHover,
-  pending,
   activeRooms,
   movable,
   onDieDown,
@@ -328,7 +326,6 @@ function Base({
   reach: number | null; // furthest route index the selected die can dig to
   onCell: (c: Cell) => void;
   onHover: (c: Cell | null) => void;
-  pending: Cell | null;
   activeRooms: Set<string>;
   movable: (dieId: number) => boolean;
   onDieDown: (dieId: number, e: RPointerEvent) => void;
@@ -453,7 +450,6 @@ function Base({
           const die = s.dice.find((d) => same(d.cell, cell));
           const robot = s.robots.find((r) => same(r.cell, cell));
           const ok = selectable(cell);
-          const isPending = same(pending, cell);
           const canMove = die && movable(die.id);
           return (
             <div key={key(cell)} className="absolute z-20 p-1.5" style={cellBox(cell)}>
@@ -470,11 +466,11 @@ function Base({
                   "flex h-full items-center justify-center rounded-sm transition-colors",
                   justDug.current.has(key(cell)) && "animate-dug",
                   ok && "cursor-pointer bg-energy/10 ring-2 ring-inset ring-energy/70 hover:bg-energy/25",
-                  isPending && "bg-energy/30 ring-energy",
                 )}
               >
                 {die && die.cell![0] >= 0 && (
                   <span
+                    onClick={(e) => e.stopPropagation()}
                     onPointerDown={canMove ? (e) => onDieDown(die.id, e) : undefined}
                     data-die={die.id}
                     className={cn("relative", canMove && "cursor-grab touch-none", draggingId === die.id && "opacity-30")}
@@ -744,7 +740,6 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
   }, [s.phase, s.difficulty, s.round]);
   const [placements, setPlacements] = useState<Placement[]>([]);
   const [sel, setSel] = useState<number | null>(null);
-  const [pending, setPending] = useState<Cell | null>(null);
   const [hover, setHover] = useState<Cell | null>(null);
   const [drag, setDrag] = useState<{ dieId: number; x: number; y: number } | null>(null);
   const [exc, setExc] = useState(initial.excavator);
@@ -806,7 +801,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
   const selCtx = sel !== null ? ctx(sel) : null;
   const selBase = selCtx?.base ?? s;
-  const previewCell = pending ?? hover;
+  const previewCell = hover;
   const preview = useMemo(() => {
     if (sel === null || !previewCell || !selCtx?.base || canPlace(selCtx.base, sel, previewCell)) return null;
     return placeDie(selCtx.base, sel, previewCell);
@@ -838,14 +833,12 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
       // White die placed with dice left: lock everything and reroll the rest right away.
       fresh(reroll(next));
       setSel(null);
-      setPending(null);
       setHover(null);
       return;
     }
     setS(next);
     setPlacements(list);
     setSel(null);
-    setPending(null);
     setHover(null);
   };
 
@@ -862,14 +855,12 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     setS(next);
     setPlacements(list);
     setSel(dieId);
-    setPending(null);
   };
 
   const onCell = (cell: Cell) => {
     if (s.phase === "placeRobot") return setS(placeRobot(s, cell));
-    if (sel === null) return;
-    if (same(pending, cell)) return commitDie(sel, cell);
-    setPending(cell);
+    if (sel === null || !legal(sel, cell)) return;
+    commitDie(sel, cell);
   };
 
   const undo = () => {
@@ -880,7 +871,6 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     if (last) rolled.current.ids.add(last.dieId);
     setS(replay(lockBase, list) ?? lockBase);
     setPlacements(list);
-    setPending(null);
     setSel(null);
   };
 
@@ -892,7 +882,6 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     e.preventDefault();
     const wasSelected = sel === dieId;
     setSel(dieId);
-    setPending(null);
     const x0 = e.clientX;
     const y0 = e.clientY;
     let moved = false;
@@ -949,7 +938,6 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
           reach={reach}
           onCell={onCell}
           onHover={setHover}
-          pending={pending}
           activeRooms={activeRooms}
           movable={movable}
           onDieDown={startDrag}
@@ -967,9 +955,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
         <div className="mb-2 flex items-center justify-between">
           <span className="text-[11px] uppercase tracking-widest text-muted-foreground">
             {s.phase === "place" &&
-              (pending
-                  ? "Tap again or confirm"
-                  : selPlaced
+              (selPlaced
                     ? "Move this die, or drag it to the tray"
                     : sel !== null
                       ? "Tap or drag to a glowing space"
@@ -1024,17 +1010,13 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
               })}
             </div>
             <div className="flex gap-1.5 empty:hidden [&:not(:empty)]:mt-2">
-              {selPlaced && !pending ? (
-                <ActionBtn tone="muted" onClick={() => returnDie(sel!)}>
+              {selPlaced && sel !== null ? (
+                <ActionBtn tone="muted" onClick={() => returnDie(sel)}>
                   Return die to tray
                 </ActionBtn>
               ) : unplaced.length === 0 ? null : s.needsReroll ? (
                 <ActionBtn tone="warn" onClick={() => { fresh(reroll(s)); setSel(null); }}>
                   <Dices className="size-4" /> Reroll available dice
-                </ActionBtn>
-              ) : pending && selDie ? (
-                <ActionBtn tone="primary" onClick={() => commitDie(selDie.id, pending)}>
-                  Place {selDie.value} · ships move {shipMove(selBase, selDie, pending)}
                 </ActionBtn>
               ) : stuck ? (
                 <ActionBtn tone="muted" onClick={() => {
