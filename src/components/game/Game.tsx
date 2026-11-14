@@ -405,16 +405,22 @@ function Base({
                 )}
                 <RoomIcons r={r} className="pointer-events-none absolute left-1 top-0.5 opacity-70" />
                 {r.mod !== 0 && <span className="absolute right-0.5 top-0.5 rounded-sm bg-background px-1 text-[10px] font-bold text-foreground">{r.mod > 0 ? `+${r.mod}` : r.mod}</span>}
-                {r.cost > 0 && (
-                  <div className="pointer-events-none absolute -bottom-1.5 left-1/2 z-10 flex -translate-x-1/2 gap-px">
-                    {Array.from({ length: r.cost }, (_, i) => (
-                      <span key={i} className="flex size-3.5 items-center justify-center rounded-full bg-room-energy text-background">
-                        <Zap className="size-2.5" />
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
+            </div>
+          );
+        })}
+        {/* Costs sit above placement highlights, independently of room opacity. */}
+        {b.rooms.filter((r) => r.cost > 0).map((r) => {
+          const left = Math.min(...r.cells.map((c) => c[1]));
+          const right = Math.max(...r.cells.map((c) => c[1]));
+          const bottom = Math.max(...r.cells.map((c) => c[0]));
+          return (
+            <div key={`cost-${r.id}`} aria-label={`${roomLabel(r)} energy cost ${r.cost}`} className="pointer-events-none absolute z-40 flex -translate-x-1/2 gap-px" style={{ left: `${(left + right + 1) * 10}%`, top: (bottom + 1) * CELL_H - 10 }}>
+              {Array.from({ length: r.cost }, (_, i) => (
+                <span key={i} className="flex size-3.5 items-center justify-center rounded-full bg-room-energy text-background">
+                  <Zap className="size-2.5" />
+                </span>
+              ))}
             </div>
           );
         })}
