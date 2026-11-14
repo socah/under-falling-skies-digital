@@ -409,7 +409,7 @@ function Base({
                       const a = c0 + k * i;
                       return PX[p] && (
                         <span key={p} className="h-full min-w-0 flex-1 bg-no-repeat [image-rendering:pixelated]"
-                          style={{ backgroundImage: `url(${PX[p]})`, backgroundSize: `${(5 / k) * 100}% 100%`, backgroundPosition: `${k < 5 ? (a / (5 - k)) * 100 : 0}% 50%` }} />
+                          style={{ backgroundImage: `url(${PX[p]})`, backgroundSize: `${(5 / k) * 100}% 165%`, backgroundPosition: `${k < 5 ? (a / (5 - k)) * 100 : 0}% 45%` }} />
                       );
                     })}
                   </span>
