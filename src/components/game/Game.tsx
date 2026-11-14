@@ -541,14 +541,14 @@ function EnergyBoxes({ s, top }: { s: GameState; top: number }) {
   const dE = useChange(s.energy, (a, b) => b - a);
   return (
     <div aria-label={`Energy ${s.energy} of ${MAX_ENERGY}`} title={`Energy ${s.energy}/${MAX_ENERGY}${gain ? ` (+${gain} this turn)` : ""}`} className="absolute inset-x-0 bottom-1 z-30 flex flex-col items-center justify-end gap-0.5" style={{ top }}>
-      <Zap className="size-3 text-energy" />
+      <Zap className="size-3 text-room-energy" />
       <div className="relative flex flex-col-reverse gap-0.5">
         {Array.from({ length: MAX_ENERGY }, (_, i) => (
           <span key={i} className={cn("h-2 w-4 rounded-[2px] border transition-colors duration-300",
-            i < s.energy ? "border-energy bg-energy box-glow" : i < s.energy + gain ? "border-energy/80 bg-energy/25 animate-glow-pulse" : "border-energy/30 bg-background/40")} />
+            i < s.energy ? "border-room-energy bg-room-energy text-room-energy box-glow" : i < s.energy + gain ? "border-room-energy/80 bg-room-energy/25 animate-glow-pulse" : "border-room-energy/30 bg-background/40")} />
         ))}
         {dE && (
-          <span key={dE.k} className={cn("pointer-events-none absolute left-full top-0 animate-float-up text-xs font-bold", dE.d > 0 ? "text-energy" : "text-threat")}>
+          <span key={dE.k} className={cn("pointer-events-none absolute left-full top-0 animate-float-up text-xs font-bold", dE.d > 0 ? "text-room-energy" : "text-threat")}>
             {dE.d > 0 ? `+${dE.d}` : dE.d}
           </span>
         )}
