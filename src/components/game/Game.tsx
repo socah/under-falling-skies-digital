@@ -221,11 +221,11 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
   const shipStyle = (pos: number, col: number) => ({ top: (pos + 1) * ROW_H + 3, left: `calc(${col * 20}% + 10% - 12px)` });
   return (
     <section
-      className={cn("relative flex rounded-md border border-border bg-cover bg-center", look === "abstract" && "sky-gradient")}
+      className={cn("relative grid grid-cols-[2.5rem_minmax(0,1fr)] rounded-md border border-border bg-cover bg-center", look === "abstract" && "sky-gradient")}
       style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.35), rgb(0 0 0 / 0.35)), url(${skyBg})` } : undefined}
       aria-label="Sky"
     >
-      <div className="relative w-10 shrink-0 border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
+      <div className="relative border-r border-border/60" style={{ height: SKY_ROWS * ROW_H }}>
         {b.msEffects.map((e, r) => (
           <div key={r} className="absolute inset-x-0 flex items-center justify-center border-t border-border/30" style={{ top: (r + 1) * ROW_H, height: ROW_H }}>
             {e && <MsGlyph e={e} />}
@@ -352,10 +352,10 @@ function Base({
   return (
     <section
       aria-label="Underground base"
-      className="flex rounded-md border border-border bg-card/60 bg-cover"
+      className="grid grid-cols-[2.5rem_minmax(0,1fr)] rounded-md border border-border bg-card/60 bg-cover"
       style={look === "illustrated" ? { backgroundImage: `linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)), url(${baseBg})` } : undefined}
     >
-      <div className="flex w-8 shrink-0 flex-col-reverse items-stretch gap-0.5 border-r border-border/60 px-1 py-1" aria-label="Research track">
+      <div className="flex flex-col-reverse items-stretch gap-0.5 border-r border-border/60 px-1 py-1" aria-label="Research track">
         {b.research.slice(1).map((v, i) => (
           <span
             key={i}
@@ -508,7 +508,7 @@ function Base({
 function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) => void; free: number[] }) {
   const hit = useChange(s.damage, (a, b) => (b > a ? b - a : null), 500);
   const items: ReactNode[] = [
-    <GameMenu key="m" current={s.difficulty} onNew={onNew} />,
+    <GameMenu key="m" current={s.difficulty} onNew={onNew} log={s.log} />,
     <span key="h" title={`Hull ${MAX_DAMAGE - s.damage}/${MAX_DAMAGE}`} aria-label="Hull" className={cn("flex gap-px rounded-sm px-0.5", hit && "animate-hit")}>
       {Array.from({ length: MAX_DAMAGE }, (_, i) => (
         <span key={i} className={cn("h-3 w-1 rounded-[1px]", i < MAX_DAMAGE - s.damage ? "bg-research" : "bg-threat/40")} />
@@ -564,7 +564,7 @@ function setupLabel(code: string) {
   return CARDS.filter((_, i) => code[i] === "h").map((c) => c.name).join(" + ");
 }
 
-function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficulty) => void }) {
+function GameMenu({ current, onNew, log }: { current: Difficulty; onNew: (d: Difficulty) => void; log: string[] }) {
   const [open, setOpen] = useState(false);
   const [d, setD] = useState(normalizeSetup(current));
   const [stats, setStats] = useState<Record<string, SetupStats>>({});
@@ -613,6 +613,14 @@ function GameMenu({ current, onNew }: { current: Difficulty; onNew: (d: Difficul
             This setup: {cur ? `${cur.won}/${cur.played} won (${pct(cur)})${cur.bestRounds !== null ? ` · best win in ${cur.bestRounds} rounds` : ""}` : "not played yet"}
           </p>
           <LookPicker />
+          <details className="text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer select-none uppercase tracking-widest">Action log</summary>
+            <ol className="mt-2 max-h-40 space-y-1 overflow-y-auto" aria-label="Game log">
+              {log.map((entry, i) => (
+                <li key={i} className={cn(i === log.length - 1 && "text-foreground")}>› {entry}</li>
+              ))}
+            </ol>
+          </details>
           <ActionBtn tone="primary" onClick={() => { onNew(d); setOpen(false); }}>
             Start new game
           </ActionBtn>
@@ -943,16 +951,6 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
           onDieDown={startDrag}
           draggingId={drag?.dieId ?? null}
         />
-        <details className="px-1 text-[11px] text-muted-foreground">
-          <summary className="cursor-pointer select-none uppercase tracking-widest">Action log</summary>
-        <ol className="mt-1 space-y-0.5" aria-label="Game log">
-          {s.log.slice(-4).map((l, i) => (
-            <li key={`${s.log.length}-${i}`} className={cn(i === Math.min(3, s.log.length - 1) && "text-foreground")}>
-              › {l}
-            </li>
-          ))}
-        </ol>
-        </details>
       </main>
 
       {dragDie && (
@@ -988,7 +986,12 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
         {s.phase === "place" && (
           <>
-            <div className="flex min-h-14 justify-center gap-3" role="radiogroup" aria-label="Dice tray" data-tray>
+            <div className="flex min-h-14 items-center justify-center gap-3" role={unplaced.length ? "radiogroup" : undefined} aria-label="Dice tray" data-tray>
+              {unplaced.length === 0 && (
+                <ActionBtn tone="primary" onClick={() => { fresh(startResolve(s)); setSel(null); }}>
+                  End dice phase · Resolve rooms
+                </ActionBtn>
+              )}
               {s.dice.filter((d) => !d.cell).map((d, i) => {
                 const placed = false;
                 // Tumble only on a fresh roll; a die returned from the board just pops back in.
@@ -1016,16 +1019,12 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
                 );
               })}
             </div>
-            <div className="mt-2 flex gap-1.5">
+            <div className="flex gap-1.5 empty:hidden [&:not(:empty)]:mt-2">
               {selPlaced && !pending ? (
                 <ActionBtn tone="muted" onClick={() => returnDie(sel!)}>
                   Return die to tray
                 </ActionBtn>
-              ) : unplaced.length === 0 ? (
-                <ActionBtn tone="primary" onClick={() => { fresh(startResolve(s)); setSel(null); }}>
-                  End dice phase · Resolve rooms
-                </ActionBtn>
-              ) : s.needsReroll ? (
+              ) : unplaced.length === 0 ? null : s.needsReroll ? (
                 <ActionBtn tone="warn" onClick={() => { fresh(reroll(s)); setSel(null); }}>
                   <Dices className="size-4" /> Reroll available dice
                 </ActionBtn>
@@ -1043,11 +1042,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
                 }}>
                   No legal space — discard die
                 </ActionBtn>
-              ) : (
-                <ActionBtn tone="muted" disabled>
-                  {unplaced.length} dice left
-                </ActionBtn>
-              )}
+              ) : null}
             </div>
           </>
         )}
