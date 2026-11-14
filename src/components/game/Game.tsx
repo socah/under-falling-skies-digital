@@ -1,7 +1,7 @@
-import pxEnergy from "@/assets/room-energy.jpg";
-import pxRobot from "@/assets/room-robot.jpg";
-import pxFighter from "@/assets/room-fighter.jpg";
-import pxResearch from "@/assets/room-research.jpg";
+import pxEnergy from "@/assets/pano-energy.jpg";
+import pxRobot from "@/assets/pano-robot.jpg";
+import pxFighter from "@/assets/pano-fighter.jpg";
+import pxResearch from "@/assets/pano-research.jpg";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Lock, Menu, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -402,7 +402,16 @@ function Base({
               >
                 {look === "illustrated" && usable && (
                   <span className="pointer-events-none absolute inset-0 flex overflow-hidden rounded-[1px] opacity-60">
-                    {r.parts.map((p) => PX[p] && <img key={p} src={PX[p]} alt="" className="h-full min-w-0 flex-1 object-cover object-center [image-rendering:pixelated]" />)}
+                    {r.parts.map((p, i) => {
+                      // Each column of the board maps to its own fifth of the room panorama, so tiles never repeat.
+                      const w = Math.max(...cs) - c0 + 1;
+                      const k = w / r.parts.length;
+                      const a = c0 + k * i;
+                      return PX[p] && (
+                        <span key={p} className="h-full min-w-0 flex-1 bg-no-repeat [image-rendering:pixelated]"
+                          style={{ backgroundImage: `url(${PX[p]})`, backgroundSize: `${(5 / k) * 100}% 100%`, backgroundPosition: `${k < 5 ? (a / (5 - k)) * 100 : 0}% 50%` }} />
+                      );
+                    })}
                   </span>
                 )}
                 <RoomIcons r={r} className="pointer-events-none absolute left-1 top-0.5 opacity-70" />
