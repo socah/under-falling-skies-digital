@@ -402,7 +402,7 @@ function Base({
               >
                 {look === "illustrated" && usable && (
                   <span className="pointer-events-none absolute inset-0 flex overflow-hidden rounded-[1px] opacity-60">
-                    {r.parts.map((p) => PX[p] && <img key={p} src={PX[p]} alt="" className="h-full min-w-0 flex-1 object-contain [image-rendering:pixelated]" />)}
+                    {r.parts.map((p) => PX[p] && <img key={p} src={PX[p]} alt="" className="h-full min-w-0 flex-1 object-cover object-center [image-rendering:pixelated]" />)}
                   </span>
                 )}
                 <RoomIcons r={r} className="pointer-events-none absolute left-1 top-0.5 opacity-70" />
