@@ -844,8 +844,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     }
     setS(next);
     setPlacements(list);
-    const nextDie = next.dice.find((d) => !d.cell);
-    setSel(nextDie ? nextDie.id : null);
+    setSel(null);
     setPending(null);
     setHover(null);
   };
@@ -891,6 +890,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
   const startDrag = (dieId: number, e: RPointerEvent) => {
     if (s.phase !== "place" || s.needsReroll && !placedIds.has(dieId)) return;
     e.preventDefault();
+    const wasSelected = sel === dieId;
     setSel(dieId);
     setPending(null);
     const x0 = e.clientX;
@@ -917,7 +917,10 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
       window.removeEventListener("pointercancel", up);
       setDrag(null);
       setHover(null);
-      if (!moved) return;
+      if (!moved) {
+        if (wasSelected) setSel(null);
+        return;
+      }
       if (target) latest.current.commitDie(dieId, target, at);
       else if (overTray && placedIds.has(dieId)) latest.current.returnDie(dieId, at);
     };
