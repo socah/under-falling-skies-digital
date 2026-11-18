@@ -42,8 +42,9 @@ jobs:
       - name: Collect files
         run: |
           mkdir dist-release
-          cp src-tauri/target/release/bundle/appimage/*.AppImage dist-release/
-          cp src-tauri/target/release/bundle/deb/*.deb dist-release/
+          v=$(node -p "require('./package.json').version")
+          cp src-tauri/target/release/bundle/appimage/*.AppImage "dist-release/under-falling-skies_${v}_amd64.AppImage"
+          cp src-tauri/target/release/bundle/deb/*.deb "dist-release/under-falling-skies_${v}_amd64.deb"
           ls -lh dist-release
 
       - uses: actions/upload-artifact@v5
