@@ -96,19 +96,16 @@ jobs:
       - name: Configure release signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          cd src-tauri/gen/android
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          {
-            echo "keyAlias=$KEY_ALIAS"
-            echo "password=$KEYSTORE_PASSWORD"
-            echo "storeFile=$RUNNER_TEMP/release.jks"
-          } > keystore.properties
-          cat ../../android-signing.gradle.kts.snippet >> app/build.gradle.kts
+          cat src-tauri/android-signing.gradle.kts.snippet >> src-tauri/gen/android/app/build.gradle.kts
 
-      - run: bun tauri android build --apk
+      - name: Build APK
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: bun tauri android build --apk
 
       - name: Collect files
         run: |
