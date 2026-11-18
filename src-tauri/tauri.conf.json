@@ -1,0 +1,54 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Under Falling Skies",
+  "version": "../package.json",
+  "identifier": "io.github.socah.underfallingskies",
+  "build": {
+    "frontendDist": "../.output/public",
+    "devUrl": "http://localhost:8080",
+    "beforeDevCommand": "bun run dev",
+    "beforeBuildCommand": "bun run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Under Falling Skies",
+        "width": 480,
+        "height": 900,
+        "minWidth": 360,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "appimage",
+      "deb"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    },
+    "category": "BoardGame",
+    "shortDescription": "Solo dice-placement defense game",
+    "publisher": "socah",
+    "copyright": "Unofficial fan adaptation of Under Falling Skies by Tomáš Uhlíř",
+    "linux": {
+      "deb": {
+        "section": "games"
+      }
+    }
+  }
+}

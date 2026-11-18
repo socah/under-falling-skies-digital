@@ -1,0 +1,21 @@
+
+// --- Release signing, appended by .github/workflows/release.yml after `tauri android init` ---
+// Reads src-tauri/gen/android/keystore.properties, which CI writes from GitHub secrets.
+android {
+    signingConfigs {
+        create("release") {
+            val props = java.util.Properties().apply {
+                load(java.io.FileInputStream(rootProject.file("keystore.properties")))
+            }
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("password")
+            storePassword = props.getProperty("password")
+            storeFile = file(props.getProperty("storeFile"))
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+}

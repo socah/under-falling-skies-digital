@@ -60,6 +60,53 @@ Not using mise? Any **Node.js 20.19+ / 22.12+** (Vite 8 requires it) together wi
 | `test`            | Run the test suite once              |
 | `test:watch`      | Run tests in watch mode              |
 | `lint` / `format` | ESLint / Prettier                    |
+| `tauri dev`       | Run the game in a desktop window     |
+| `tauri build`     | Build the Linux AppImage and `.deb`  |
+
+## Native apps (Tauri)
+
+The Linux app and the Android APK are built with [Tauri 2](https://v2.tauri.app). Tauri wraps the static web build (`.output/public`) in a native window that uses the system web view (WebKitGTK on Linux, Android System WebView on Android). The game code is the same as on the web.
+
+```
+src-tauri/
+├── tauri.conf.json      # App name, id, window size, bundle targets; version comes from package.json
+├── Cargo.toml           # Rust shell (no custom native code yet)
+├── src/lib.rs           # Tauri entry point
+├── capabilities/        # Which native APIs the page may call (only the defaults)
+├── icons/               # Generated from app-icon.png by `bun tauri icon app-icon.png`
+└── android-signing.gradle.kts.snippet   # Release signing, added to the Android project in CI
+```
+
+**Desktop development.** Install the Tauri system libraries once (Ubuntu/Debian):
+
+```sh
+sudo apt install libwebkit2gtk-4.1-dev libxdo-dev libayatana-appindicator3-dev librsvg2-dev build-essential
+```
+
+Then `bun tauri dev` opens the game in a desktop window with hot reload, and `bun tauri build` builds the release bundles into `src-tauri/target/release/bundle/`. Rust is pinned in `mise.toml`.
+
+**Android.** The Android project (`src-tauri/gen/android`) isn't committed. CI generates it on each build with `bun tauri android init`. To build locally you'd also need the Android SDK and NDK ([Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#android)).
+
+## Releases
+
+Releases are built by GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)):
+
+1. Bump `version` in `package.json` (for example `0.2.0`) and commit.
+2. Tag and push:
+   ```sh
+   git tag v0.2.0 && git push origin v0.2.0
+   ```
+3. The workflow builds the AppImage, the `.deb` and a signed APK, then publishes them as a GitHub release.
+
+To test a build without publishing, start the workflow manually from the **Actions** tab. The files are attached to the run as artifacts.
+
+The APK is signed with a release key stored in the repo secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`. Every update must be signed with the same key, so keep an offline backup of the keystore.
+
+### Installing
+
+- **Linux, AppImage:** `chmod +x Under*.AppImage` and run it.
+- **Linux, .deb:** `sudo apt install ./under-falling-skies_*.deb`.
+- **Android:** download the APK on your phone, open it, and allow installs from that source when asked.
 
 ## Project structure
 

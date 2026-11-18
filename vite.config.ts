@@ -11,5 +11,10 @@ export default defineConfig({
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
     server: { entry: "server" },
+    // Emit a static index.html so the build can be wrapped by Tauri (src-tauri/).
+    spa: { enabled: true, prerender: { outputPath: "/index.html" } },
   },
+  // Tauri's devUrl is fixed to http://localhost:8080, so fail loudly if the port is taken
+  // instead of silently moving to 8081.
+  vite: { server: { strictPort: true } },
 });
