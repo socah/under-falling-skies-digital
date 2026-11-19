@@ -45,6 +45,9 @@
     "shortDescription": "Solo dice-placement defense game",
     "publisher": "socah",
     "copyright": "Unofficial fan adaptation of Under Falling Skies by Tomáš Uhlíř",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "linux": {
       "deb": {
         "section": "games"

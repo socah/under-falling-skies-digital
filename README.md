@@ -69,7 +69,7 @@ Not using mise? Any **Node.js 20.19+ / 22.12+** (Vite 8 requires it) together wi
 
 ## Native apps (Tauri)
 
-The Linux app and the Android APK are built with [Tauri 2](https://v2.tauri.app). Tauri wraps the static web build (`.output/public`) in a native window that uses the system web view (WebKitGTK on Linux, Android System WebView on Android). The game code is the same as on the web.
+The desktop apps (Linux, Windows, macOS) and the Android APK are built with [Tauri 2](https://v2.tauri.app). Tauri wraps the static web build (`.output/public`) in a native window that uses the system web view (WebKitGTK on Linux, WebView2 on Windows, WKWebView on macOS, Android System WebView on Android). The game code is the same as on the web.
 
 ```
 src-tauri/
@@ -101,7 +101,7 @@ Releases are built by GitHub Actions ([`.github/workflows/release.yml`](.github/
    ```sh
    git tag v0.2.0 && git push origin v0.2.0
    ```
-3. The workflow builds the AppImage, the `.deb` and a signed APK, then publishes them as a GitHub release.
+3. The workflow builds the Linux AppImage and `.deb`, the Windows installer, the macOS `.dmg` and a signed APK, then publishes them as a GitHub release.
 
 To test a build without publishing, start the workflow manually from the **Actions** tab. The files are attached to the run as artifacts. Tick **webview_debug** there to get an APK whose game can be inspected and profiled from desktop Chrome (`chrome://inspect`, phone connected over USB). Tag builds never have this.
 
@@ -111,6 +111,8 @@ The APK is signed with a release key stored in the repo secrets `ANDROID_KEYSTOR
 
 - **Linux, AppImage:** `chmod +x Under*.AppImage` and run it.
 - **Linux, .deb:** `sudo apt install ./under-falling-skies_*.deb`.
+- **Windows:** run `under-falling-skies_*_x64-setup.exe`. The installer isn't code-signed, so Windows SmartScreen may say "Windows protected your PC": click **More info**, then **Run anyway**.
+- **macOS:** open the `.dmg` and drag the app to Applications. It isn't notarized by Apple, so the first launch is blocked: open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** (or run `xattr -dr com.apple.quarantine "/Applications/Under Falling Skies.app"`). Works on both Apple Silicon and Intel Macs.
 - **Android:** download the APK on your phone, open it, and allow installs from that source when asked.
 
 ## Project structure
