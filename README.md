@@ -2,6 +2,10 @@
 
 A browser adaptation of **[Under Falling Skies: A 9-Card Solo Game](https://boardgamegeek.com/boardgame/273779/under-falling-skies-a-9-card-solo-game)**, the print-and-play solo dice-placement game by Tomáš Uhlíř. Place dice to shoot down alien ships, dig deeper into your underground base and finish researching a weapon before the mothership lands.
 
+<p align="center">
+  <img src="docs/screenshot.png" alt="The game on an Android phone: the alien sky with ships and the mothership on top, the underground base with its rooms and research track below, and the dice tray at the bottom" width="360">
+</p>
+
 > This is an unofficial fan project for personal use. *Under Falling Skies* and its design belong to its designer and publisher (Czech Games Edition). If you enjoy it, buy the full game.
 
 ## How to play
