@@ -1,6 +1,10 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+/* Fonts are bundled (not loaded from Google) so the apps look right offline. */
+@import "@fontsource/share-tech-mono/latin-400.css";
+@import "@fontsource/chakra-petch/latin-500.css";
+@import "@fontsource/chakra-petch/latin-700.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -199,3 +203,37 @@
 @keyframes glow-pulse { 0% { box-shadow: 0 0 0 0 var(--research); } 100% { box-shadow: 0 0 0 8px transparent; } }
 @utility animate-glow-pulse { animation: glow-pulse 0.9s ease-out 2; }
 
+
+/* a ship crashing into the base: dive to the damage row, then explode */
+@keyframes crash-dive { 0% { top: var(--from); } 85% { opacity: 1; } 100% { top: var(--to); opacity: 0; } }
+@utility animate-crash { animation: crash-dive 0.45s cubic-bezier(.55,0,1,.45) forwards; }
+@keyframes crash-boom { 0% { transform: scale(0.2); opacity: 1; } 40% { transform: scale(1.6); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+@utility animate-crash-boom { animation: crash-boom 0.8s ease-out 0.4s both; }
+@keyframes crash-ring { 0% { transform: scale(0.3); opacity: 0.9; } 100% { transform: scale(3.2); opacity: 0; } }
+@utility animate-crash-ring { animation: crash-ring 0.7s ease-out 0.4s both; }
+/* screen-edge red pulse on damage */
+@keyframes damage-vignette { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
+@utility animate-damage-vignette {
+  box-shadow: inset 0 0 70px 16px color-mix(in oklab, var(--threat) 80%, transparent);
+  animation: damage-vignette 1s ease-out 0.4s both;
+}
+
+/* dice faces: ordinary dice are polished alloy, reroll dice dark steel, robot dice a glowing machine readout */
+@utility die-white {
+  background: linear-gradient(155deg, oklch(0.97 0.02 170), oklch(0.86 0.035 180) 45%, oklch(0.72 0.04 195));
+  border-color: oklch(0.98 0.015 170);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), inset 0 -3px 0 oklch(0.5 0.04 200 / 0.55), 0 0 8px -3px var(--foreground), 0 2px 4px rgb(0 0 0 / 0.45);
+}
+@utility die-grey {
+  background: linear-gradient(155deg, oklch(0.43 0.015 220), var(--die-grey) 50%, oklch(0.27 0.012 220));
+  border-color: color-mix(in oklab, var(--foreground) 30%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 -3px 0 rgb(0 0 0 / 0.35), 0 2px 4px rgb(0 0 0 / 0.45);
+}
+@utility die-robot {
+  background: radial-gradient(circle at 50% 35%, oklch(0.31 0.08 245), oklch(0.17 0.05 250) 75%);
+  border-color: var(--room-robot);
+  box-shadow: inset 0 0 6px color-mix(in oklab, var(--room-robot) 55%, transparent), 0 0 8px -1px var(--room-robot), 0 2px 4px rgb(0 0 0 / 0.45);
+}
+@utility pip-engraved { background: oklch(0.24 0.04 200); box-shadow: inset 0 1px 1.5px rgb(0 0 0 / 0.7), 0 1px 0 rgb(255 255 255 / 0.55); }
+@utility pip-light { background: var(--foreground); box-shadow: 0 0 2px rgb(0 0 0 / 0.5); }
+@utility pip-glow { background: oklch(0.9 0.09 230); box-shadow: 0 0 4px 0.5px oklch(0.72 0.17 240); }

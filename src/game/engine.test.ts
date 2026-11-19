@@ -14,7 +14,9 @@ import {
   researchAdvance,
   resolveDig,
   resolveRoom,
+  resolvables,
   shootDown,
+  startResolve,
   type GameState,
 } from "./engine";
 
@@ -85,6 +87,7 @@ describe("rooms", () => {
     s.ships[0]!.pos = 3; // column 0, row 3 has explosion 2
     expect(shootDown(s, 1)).toBe(1);
     expect(s.ships[0]!.pos).toBe(3);
+    expect(s.ships[1]!.exit).toBe("shot");
   });
 
   it("excavator costs 1 energy and needs value >= distance", () => {
@@ -105,6 +108,7 @@ describe("damage and end", () => {
     s = placeDie(s, 0, [1, 4]);
     expect(s.damage).toBe(1);
     expect(s.ships[4]!.pos).toBe(null);
+    expect(s.ships[4]!.exit).toBe("crash");
   });
 
   it("5 damage loses the game", () => {
@@ -227,5 +231,24 @@ describe("rearranging dice", () => {
     expect(s.ships[2]!.pos).toBe(2);
     const r = replay(base, [])!;
     expect(r.ships[2]!.pos).toBe(-1);
+  });
+});
+
+describe("room resolution", () => {
+  it("incomplete rooms are skipped and never offered", () => {
+    let s = game();
+    s = placeDie(s, 0, [3, 2]); // one space of the two-space lab R3c
+    const dug = { ...s, excavator: 99 }; // pretend the excavator has dug the whole base
+    const r = startResolve({ ...dug, dice: dug.dice.map((d) => (d.cell ? d : { ...d, cell: [-1, -1] as [number, number], resolved: true })) });
+    expect(resolvables(r).some((x) => x.key === "R3c")).toBe(false);
+    expect(r.dice[0]!.resolved).toBe(true);
+  });
+
+  it("filled rooms are still offered", () => {
+    let s = game();
+    s = placeDie(s, 0, [1, 2]); // single-space fighter room
+    const r = startResolve({ ...s, dice: s.dice.map((d) => (d.cell ? d : { ...d, cell: [-1, -1] as [number, number], resolved: true })) });
+    expect(resolvables(r).some((x) => x.key === "R1c")).toBe(true);
+    expect(r.dice[0]!.resolved).toBe(false);
   });
 });

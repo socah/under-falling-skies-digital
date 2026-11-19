@@ -3,7 +3,7 @@ import pxRobot from "@/assets/pano-robot.jpg";
 import pxFighter from "@/assets/pano-fighter.jpg";
 import pxResearch from "@/assets/pano-research.jpg";
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { BookOpen, Bot, ChevronsDown, Dices, FlaskConical, Lock, Menu, Pickaxe, Plane, Skull, Undo2, Zap } from "lucide-react";
+import { BookOpen, Bot, ChevronsDown, Dices, Flag, FlaskConical, Lock, Menu, Pickaxe, Plane, Shield, Skull, Trash2, TriangleAlert, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { BASE_ROWS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, CARDS, normalizeSetup, setupLevel, type Difficulty, type MsEffect, type Room, type RoomPart } from "@/game/data";
 import {
@@ -40,8 +40,10 @@ import alienShip from "@/assets/alien-ship.png";
 type Look = "illustrated" | "abstract";
 const LookCtx = createContext<{ look: Look; setLook: (l: Look) => void }>({ look: "illustrated", setLook: () => {} });
 import { loadStats, recordResult, type SetupStats } from "@/game/stats";
+import { clearSave, loadSave, writeSave, type Placement, type SavedGame, type Snapshot } from "@/game/save";
 
-type Placement = { dieId: number; cell: Cell };
+/** Menu actions: start a new game with a setup, either dropping the current one or counting it as a loss. */
+type MenuActions = { onNew: (d: Difficulty) => void; onForfeit: (d: Difficulty) => void };
 const ROW_H = 22;
 const CELL_H = 56;
 const SKY_ROWS = DAMAGE_ROW + 2;
@@ -81,18 +83,18 @@ function DieFace({ value, color, small, className }: { value: number; color: Die
     <span
       aria-label={`${value}`}
       className={cn(
-        "grid grid-cols-3 grid-rows-3 rounded-[22%] border-2 shadow-[inset_0_-3px_0_rgb(0_0_0/0.25),0_2px_4px_rgb(0_0_0/0.4)]",
+        "grid grid-cols-3 grid-rows-3 rounded-[22%] border-2",
         small ? "size-8 gap-px p-1" : "size-12 gap-0.5 p-1.5",
-        color === "grey" && "border-foreground/30 bg-die-grey",
-        color === "white" && "border-die-white bg-die-white",
-        color === "robot" && "border-room-robot bg-room-robot",
+        color === "grey" && "die-grey",
+        color === "white" && "die-white",
+        color === "robot" && "die-robot",
         className,
       )}
     >
       {(PIPS[value] ?? []).map(([r, c], i) => (
         <span
           key={i}
-          className={cn("rounded-full", color === "grey" ? "bg-foreground" : "bg-background")}
+          className={cn("rounded-full", color === "grey" ? "pip-light" : color === "robot" ? "pip-glow" : "pip-engraved")}
           style={{ gridRow: r + 1, gridColumn: c + 1 }}
         />
       ))}
@@ -138,7 +140,8 @@ function useChange<T>(value: T, diff: (prev: T, next: T) => number | null, ms = 
   return ev;
 }
 
-type Boom = { id: number; pos: number; col: number; city: boolean };
+/** A ship that just left the sky: shot down by fighters, or crashed into the base. */
+type Boom = { id: number; pos: number; col: number; red: boolean; kind: "shot" | "crash" };
 function useBooms(s: GameState) {
   const prev = useRef(s.ships);
   const [booms, setBooms] = useState<Boom[]>([]);
@@ -146,12 +149,14 @@ function useBooms(s: GameState) {
     const gone: Boom[] = [];
     for (const sh of s.ships) {
       const o = prev.current.find((x) => x.id === sh.id);
-      if (o && o.pos !== null && o.pos >= 0 && sh.pos === null) gone.push({ id: sh.id, pos: o.pos, col: o.col, city: o.pos >= DAMAGE_ROW });
+      if (!o || o.pos === null || sh.pos !== null) continue;
+      if (sh.exit === "crash") gone.push({ id: sh.id, pos: o.pos, col: o.col, red: sh.color === "red", kind: "crash" });
+      else if (sh.exit === "shot" && o.pos >= 0) gone.push({ id: sh.id, pos: o.pos, col: o.col, red: sh.color === "red", kind: "shot" });
     }
     prev.current = s.ships;
     if (!gone.length) return undefined;
     setBooms(gone);
-    const t = setTimeout(() => setBooms([]), 900);
+    const t = setTimeout(() => setBooms([]), 1400);
     return () => clearTimeout(t);
   }, [s.ships]);
   return booms;
@@ -207,7 +212,7 @@ function MsGlyph({ e }: { e: MsEffect | undefined }) {
   return <span className={cn(cls, "text-research")}>-{e.n}<FlaskConical className="size-3" /></span>;
 }
 
-function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameState; preview: GameState | null; focusCol: number | null; onNew: (d: Difficulty) => void }) {
+function Sky({ s, from, preview, focusCol, menu }: { s: GameState; from: GameState; preview: GameState | null; focusCol: number | null; menu: MenuActions }) {
   const { look } = useContext(LookCtx);
   const booms = useBooms(s);
   const b = board(s);
@@ -215,6 +220,13 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
     ? preview.ships.filter((p) => {
         const o = from.ships.find((x) => x.id === p.id)!;
         return p.pos !== null && (p.pos !== o.pos || p.col !== o.col);
+      })
+    : [];
+  // Ships this placement would send into the base: previewed on the damage row with a warning.
+  const crashers = preview
+    ? preview.ships.filter((p) => {
+        const o = from.ships.find((x) => x.id === p.id)!;
+        return p.pos === null && o.pos !== null && p.exit === "crash";
       })
     : [];
   const shipStyle = (pos: number, col: number) => ({ top: (pos + 1) * ROW_H, height: ROW_H, left: `calc(${col * 20}% + 10% - 12px)` });
@@ -230,8 +242,8 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
             {e && <MsGlyph e={e} />}
           </div>
         ))}
-        <SideStats s={s} onNew={onNew} free={[-1, ...b.msEffects.flatMap((e, r) => (e || r > b.skullRow ? [] : [r]))]} />
-        <EnergyBoxes s={s} top={(b.skullRow + 2) * ROW_H} />
+        <SideStats s={s} menu={menu} free={[-1, ...b.msEffects.flatMap((e, r) => (e || r > b.skullRow ? [] : [r]))]} />
+        <HullBoxes damage={s.damage} top={(b.skullRow + 2) * ROW_H} />
         <div className="absolute -right-1.5 z-20 flex items-center text-research glow transition-all duration-700" style={{ top: (s.mothership + 1) * ROW_H, height: ROW_H }}>
           ▶
         </div>
@@ -278,17 +290,35 @@ function Sky({ s, from, preview, focusCol, onNew }: { s: GameState; from: GameSt
             </div>
           ),
         )}
-        {booms.map((x) => (
-          <div key={`b${x.id}-${x.pos}`}>
-            {!x.city && (
+        {booms.map((x) =>
+          x.kind === "shot" ? (
+            <div key={`b${x.id}-${x.pos}`}>
               <div className="absolute z-20 w-0.5 animate-laser bg-energy shadow-[0_0_8px_var(--energy)]" style={{ left: `calc(${x.col * 20}% + 10% - 1px)`, top: (x.pos + 1.5) * ROW_H, height: (SKY_ROWS - x.pos - 1.5) * ROW_H }} />
-            )}
-            <div className="absolute z-30 size-7 animate-boom rounded-full bg-[radial-gradient(circle,var(--warn),var(--threat)_55%,transparent_70%)]" style={{ top: (x.pos + 1) * ROW_H - 3, left: `calc(${x.col * 20}% + 10% - 14px)` }} />
-          </div>
-        ))}
+              <div className="absolute z-30 size-7 animate-boom rounded-full bg-[radial-gradient(circle,var(--warn),var(--threat)_55%,transparent_70%)]" style={{ top: (x.pos + 1) * ROW_H - 3, left: `calc(${x.col * 20}% + 10% - 14px)` }} />
+            </div>
+          ) : (
+            <div key={`c${x.id}-${x.pos}`}>
+              {/* The ship dives to the damage row, then explodes against the base. */}
+              <div
+                className="absolute z-20 flex animate-crash items-center"
+                style={{ ...shipStyle(x.pos, x.col), ["--from" as string]: `${(x.pos + 1) * ROW_H}px`, ["--to" as string]: `${(DAMAGE_ROW + 1) * ROW_H}px` }}
+              >
+                <EnemyShip red={x.red} />
+              </div>
+              <div className="absolute z-30 size-11 animate-crash-boom rounded-full bg-[radial-gradient(circle,white,var(--warn)_25%,var(--threat)_55%,transparent_70%)]" style={{ top: (DAMAGE_ROW + 1.5) * ROW_H - 22, left: `calc(${x.col * 20}% + 10% - 22px)` }} />
+              <div className="absolute z-30 size-11 animate-crash-ring rounded-full border-2 border-warn" style={{ top: (DAMAGE_ROW + 1.5) * ROW_H - 22, left: `calc(${x.col * 20}% + 10% - 22px)` }} />
+            </div>
+          ),
+        )}
         {ghosts.map((sh) => sh.pos === null ? null : (
           <div key={`g${sh.id}`} className="absolute z-20 flex items-center" style={shipStyle(sh.pos, sh.col)}>
             <EnemyShip red={sh.color === "red"} ghost />
+          </div>
+        ))}
+        {crashers.map((sh) => (
+          <div key={`x${sh.id}`} aria-label="This ship would hit the base" className="absolute z-30 flex items-center" style={shipStyle(DAMAGE_ROW, sh.col)}>
+            <EnemyShip red={sh.color === "red"} ghost />
+            <TriangleAlert className="absolute -right-2.5 -top-1 size-3.5 animate-pulse fill-background text-threat drop-shadow-[0_0_3px_var(--threat)]" />
           </div>
         ))}
       </div>
@@ -357,8 +387,8 @@ function Base({
           <span
             key={i}
             className={cn(
-              "flex flex-1 items-center justify-center rounded-[2px] border text-[9px] transition-colors duration-500",
-              i < s.research ? "border-research bg-research text-primary-foreground" : "border-border text-muted-foreground",
+              "flex flex-1 items-center justify-center rounded-[2px] border text-[11px] font-bold leading-none tabular-nums transition-colors duration-500",
+              i < s.research ? "border-research bg-research text-primary-foreground" : "border-border bg-background/40 text-foreground/85",
               rAdv && rAdv.d > 0 && i >= s.research - rAdv.d && i < s.research && "animate-glow-pulse",
               i === b.research.length - 2 && "border-research",
             )}
@@ -425,10 +455,11 @@ function Base({
           const left = Math.min(...r.cells.map((c) => c[1]));
           const right = Math.max(...r.cells.map((c) => c[1]));
           const bottom = Math.max(...r.cells.map((c) => c[0]));
+          const usable = roomUsable(s, r);
           return (
             <div key={`cost-${r.id}`} aria-label={`${roomLabel(r)} energy cost ${r.cost}`} className="pointer-events-none absolute z-40 flex -translate-x-1/2 gap-px" style={{ left: `${(left + right + 1) * 10}%`, top: (bottom + 1) * CELL_H - 10 }}>
               {Array.from({ length: r.cost }, (_, i) => (
-                <span key={i} className="flex size-3.5 items-center justify-center rounded-full bg-room-energy text-background">
+                <span key={i} className={cn("flex size-3.5 items-center justify-center rounded-full", usable ? "bg-room-energy text-background" : "bg-room-energy/35 text-background/80")}>
                   <Zap className="size-2.5" />
                 </span>
               ))}
@@ -521,9 +552,9 @@ function Base({
 
 /* ---------- header & menus ---------- */
 /** Round and menu tucked into the free rows of the mothership-effect column. */
-function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) => void; free: number[] }) {
+function SideStats({ s, menu, free }: { s: GameState; menu: MenuActions; free: number[] }) {
   const items: ReactNode[] = [
-    <GameMenu key="m" current={s.difficulty} onNew={onNew} log={s.log} />,
+    <GameMenu key="m" s={s} menu={menu} />,
     <span key="r" className="text-[9px] text-muted-foreground" title={`Level ${setupLevel(s.difficulty)}`}>R{s.round}</span>,
   ];
   let k = 0;
@@ -543,36 +574,45 @@ function SideStats({ s, onNew, free }: { s: GameState; onNew: (d: Difficulty) =>
   );
 }
 
-function HullTrack({ damage }: { damage: number }) {
-  const hit = useChange(damage, (a, b) => (b > a ? b - a : null), 500);
+/** Hull points, stacked vertically under the mothership-effect column. */
+function HullBoxes({ damage, top }: { damage: number; top: number }) {
+  const hit = useChange(damage, (a, b) => (b > a ? b - a : null), 900);
   return (
-    <span title={`Hull ${MAX_DAMAGE - damage}/${MAX_DAMAGE}`} aria-label={`Hull ${MAX_DAMAGE - damage} of ${MAX_DAMAGE}`} className={cn("flex shrink-0 items-center gap-1", hit && "animate-hit")}>
-      {Array.from({ length: MAX_DAMAGE }, (_, i) => (
-        <span key={i} className={cn("h-4 w-2 rounded-[2px] border", i < MAX_DAMAGE - damage ? "border-research bg-research" : "border-threat/50 bg-threat/20")} />
+    <div title={`Hull ${MAX_DAMAGE - damage}/${MAX_DAMAGE}`} aria-label={`Hull ${MAX_DAMAGE - damage} of ${MAX_DAMAGE}`} className="absolute inset-x-0 bottom-1 z-30 flex flex-col items-center justify-end gap-0.5" style={{ top }}>
+      <Shield className={cn("size-3", damage ? "text-threat" : "text-research")} />
+      <div key={hit?.k} className={cn("flex flex-col-reverse gap-0.5", hit && "animate-hit")}>
+        {Array.from({ length: MAX_DAMAGE }, (_, i) => (
+          <span key={i} className={cn("h-2.5 w-4 rounded-[2px] border transition-colors duration-300", i < MAX_DAMAGE - damage ? "border-research bg-research text-research box-glow" : "border-threat/50 bg-threat/20")} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Energy, in a row in the bottom controls. */
+function EnergyTrack({ s }: { s: GameState }) {
+  const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
+  const dE = useChange(s.energy, (a, b) => b - a);
+  return (
+    <span aria-label={`Energy ${s.energy} of ${MAX_ENERGY}`} title={`Energy ${s.energy}/${MAX_ENERGY}${gain ? ` (+${gain} this turn)` : ""}`} className="relative flex shrink-0 items-center gap-0.5">
+      <Zap className="mr-0.5 size-3.5 text-room-energy" />
+      {Array.from({ length: MAX_ENERGY }, (_, i) => (
+        <span key={i} className={cn("h-4 w-2 rounded-[2px] border transition-colors duration-300",
+          i < s.energy ? "border-room-energy bg-room-energy text-room-energy box-glow" : i < s.energy + gain ? "border-room-energy/80 bg-room-energy/25 animate-glow-pulse" : "border-room-energy/30 bg-background/40")} />
       ))}
+      {dE && (
+        <span key={dE.k} className={cn("pointer-events-none absolute -top-4 right-0 animate-float-up text-xs font-bold", dE.d > 0 ? "text-room-energy" : "text-threat")}>
+          {dE.d > 0 ? `+${dE.d}` : dE.d}
+        </span>
+      )}
     </span>
   );
 }
 
-function EnergyBoxes({ s, top }: { s: GameState; top: number }) {
-  const gain = s.phase === "place" || s.phase === "resolve" ? pendingEnergy(s) : 0;
-  const dE = useChange(s.energy, (a, b) => b - a);
-  return (
-    <div aria-label={`Energy ${s.energy} of ${MAX_ENERGY}`} title={`Energy ${s.energy}/${MAX_ENERGY}${gain ? ` (+${gain} this turn)` : ""}`} className="absolute inset-x-0 bottom-1 z-30 flex flex-col items-center justify-end gap-0.5" style={{ top }}>
-      <Zap className="size-3 text-room-energy" />
-      <div className="relative flex flex-col-reverse gap-0.5">
-        {Array.from({ length: MAX_ENERGY }, (_, i) => (
-          <span key={i} className={cn("h-2 w-4 rounded-[2px] border transition-colors duration-300",
-            i < s.energy ? "border-room-energy bg-room-energy text-room-energy box-glow" : i < s.energy + gain ? "border-room-energy/80 bg-room-energy/25 animate-glow-pulse" : "border-room-energy/30 bg-background/40")} />
-        ))}
-        {dE && (
-          <span key={dE.k} className={cn("pointer-events-none absolute left-full top-0 animate-float-up text-xs font-bold", dE.d > 0 ? "text-room-energy" : "text-threat")}>
-            {dE.d > 0 ? `+${dE.d}` : dE.d}
-          </span>
-        )}
-      </div>
-    </div>
-  );
+/** Red pulse around the screen edges whenever the base takes damage. */
+function DamageFlash({ damage }: { damage: number }) {
+  const hit = useChange(damage, (a, b) => (b > a ? b - a : null), 1600);
+  return hit ? <div key={hit.k} aria-hidden className="pointer-events-none fixed inset-0 z-[60] animate-damage-vignette" /> : null;
 }
 
 const ALL_E = "e".repeat(CARDS.length);
@@ -585,15 +625,21 @@ function setupLabel(code: string) {
   return CARDS.filter((_, i) => code[i] === "h").map((c) => c.name).join(" + ");
 }
 
-function GameMenu({ current, onNew, log }: { current: Difficulty; onNew: (d: Difficulty) => void; log: string[] }) {
+function GameMenu({ s, menu }: { s: GameState; menu: MenuActions }) {
+  const current = s.difficulty;
+  const log = s.log;
   const [open, setOpen] = useState(false);
+  // Second tap confirms, so a stray tap in the menu can't end the game.
+  const [confirm, setConfirm] = useState<"forfeit" | "abandon" | null>(null);
+  const over = s.phase === "won" || s.phase === "lost";
+  const started = s.round > 1 || s.phase !== "place" || s.dice.some((x) => x.cell);
   const [d, setD] = useState(normalizeSetup(current));
   const [stats, setStats] = useState<Record<string, SetupStats>>({});
   const flip = (i: number) => setD((x) => x.slice(0, i) + (x[i] === "h" ? "e" : "h") + x.slice(i + 1));
   const cur = stats[d];
   const history = Object.entries(stats).sort((a, b) => setupLevel(a[0]) - setupLevel(b[0]) || b[1].last - a[1].last);
   return (
-    <Sheet open={open} onOpenChange={(o) => { setOpen(o); if (o) { setD(normalizeSetup(current)); setStats(loadStats()); } }}>
+    <Sheet open={open} onOpenChange={(o) => { setOpen(o); setConfirm(null); if (o) { setD(normalizeSetup(current)); setStats(loadStats()); } }}>
       <SheetTrigger asChild>
         <button type="button" aria-label="Menu" className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground">
           <Menu className="size-3.5" />
@@ -642,9 +688,32 @@ function GameMenu({ current, onNew, log }: { current: Difficulty; onNew: (d: Dif
               ))}
             </ol>
           </details>
-          <ActionBtn tone="primary" onClick={() => { onNew(d); setOpen(false); }}>
-            Start new game
-          </ActionBtn>
+          {over || !started ? (
+            <ActionBtn tone="primary" onClick={() => { menu.onNew(d); setOpen(false); }}>
+              Start new game
+            </ActionBtn>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-muted-foreground">Start a new game with the setup above. The current game (round {s.round}) will be:</p>
+              <div className="flex gap-1.5">
+                <ActionBtn tone={confirm === "forfeit" ? "warn" : "muted"} onClick={() => {
+                  if (confirm !== "forfeit") return setConfirm("forfeit");
+                  menu.onForfeit(d);
+                  setOpen(false);
+                }}>
+                  {confirm === "forfeit" ? "Tap to confirm" : <><Flag className="size-3.5" /> Forfeit</>}
+                </ActionBtn>
+                <ActionBtn tone={confirm === "abandon" ? "warn" : "muted"} onClick={() => {
+                  if (confirm !== "abandon") return setConfirm("abandon");
+                  menu.onNew(d);
+                  setOpen(false);
+                }}>
+                  {confirm === "abandon" ? "Tap to confirm" : <><Trash2 className="size-3.5" /> Abandon</>}
+                </ActionBtn>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Forfeit counts as a loss in your stats · Abandon isn't counted.</p>
+            </div>
+          )}
           {history.length > 0 && (
             <div>
               <p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground">Past games</p>
@@ -726,35 +795,38 @@ function RulesSheet() {
 }
 
 /* ---------- game ---------- */
+const startGame = (d: Difficulty): SavedGame => {
+  const s = newGame(Math.random, d);
+  return { s, lockBase: s, placements: [], history: [] };
+};
+
 export function Game() {
-  const [game, setGame] = useState<{ s: GameState; n: number } | null>(null);
+  const [game, setGame] = useState<{ g: SavedGame; n: number } | null>(null);
   const [look, setLookState] = useState<Look>("illustrated");
   useEffect(() => {
     if (localStorage.getItem("ufs-look") === "abstract") setLookState("abstract");
   }, []);
-  // A game saved in the old format (e.g. after an update) gets replaced by a fresh one.
+  // Resume the saved game if there is one (an unreadable or outdated save is ignored); otherwise start fresh.
   useEffect(() => {
-    if (game && !game.s) setGame({ s: newGame(), n: 1 });
-  }, [game]);
-  useEffect(() => {
-    const d = normalizeSetup(localStorage.getItem("ufs-difficulty") ?? "easy");
-    setGame({ s: newGame(Math.random, d), n: 0 });
+    const saved = loadSave();
+    setGame({ g: saved ?? startGame(normalizeSetup(localStorage.getItem("ufs-difficulty") ?? "easy")), n: 0 });
   }, []);
-  if (!game?.s) return <div className="flex min-h-screen items-center justify-center text-research glow">Booting bunker…</div>;
+  if (!game) return <div className="flex min-h-screen items-center justify-center text-research glow">Booting bunker…</div>;
   const onNew = (d: Difficulty) => {
     localStorage.setItem("ufs-difficulty", d);
-    setGame((g) => ({ s: newGame(Math.random, d), n: (g?.n ?? 0) + 1 }));
+    clearSave();
+    setGame((g) => ({ g: startGame(d), n: (g?.n ?? 0) + 1 }));
   };
   return (
     <LookCtx.Provider value={{ look, setLook: (l) => { localStorage.setItem("ufs-look", l); setLookState(l); } }}>
-      <GameView key={game.n} initial={game.s} onNew={onNew} />
+      <GameView key={game.n} initial={game.g} onNew={onNew} />
     </LookCtx.Provider>
   );
 }
 
-function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficulty) => void }) {
-  const [s, setS] = useState<GameState>(initial);
-  const [lockBase, setLockBase] = useState<GameState>(initial);
+function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficulty) => void }) {
+  const [s, setS] = useState<GameState>(initial.s);
+  const [lockBase, setLockBase] = useState<GameState>(initial.lockBase);
   const recorded = useRef(false);
   const rolled = useRef<{ roll: number; ids: Set<number> }>({ roll: -1, ids: new Set() });
   useEffect(() => {
@@ -762,11 +834,11 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
     recorded.current = true;
     recordResult(s.difficulty, s.phase === "won", s.round);
   }, [s.phase, s.difficulty, s.round]);
-  const [placements, setPlacements] = useState<Placement[]>([]);
+  const [placements, setPlacements] = useState<Placement[]>(initial.placements);
   const [sel, setSel] = useState<number | null>(null);
   const [hover, setHover] = useState<Cell | null>(null);
   const [drag, setDrag] = useState<{ dieId: number; x: number; y: number } | null>(null);
-  const [exc, setExc] = useState(initial.excavator);
+  const [exc, setExc] = useState(initial.s.excavator);
 
   // walk the excavator token one space at a time
   useEffect(() => {
@@ -797,11 +869,59 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
       el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], { duration: 320, easing: "cubic-bezier(.2,.8,.2,1)" });
     });
   });
+  /** Start from a new locked state (reroll, new round): nothing before it can be undone. */
   const fresh = (next: GameState) => {
     setS(next);
     setLockBase(next);
     setPlacements([]);
+    setHistory([]);
   };
+
+  // Undo for the resolve phase: snapshots taken before each step (resolving is deterministic, so it's fair).
+  const [history, setHistory] = useState<Snapshot[]>(initial.history);
+
+  // Save after every change so closing the app never loses the game (cleared once it's won or lost).
+  useEffect(() => {
+    writeSave({ s, lockBase, placements, history });
+  }, [s, lockBase, placements, history]);
+
+  const menu: MenuActions = {
+    onNew,
+    onForfeit: (d) => {
+      if (!recorded.current) recordResult(s.difficulty, false, s.round);
+      recorded.current = true;
+      onNew(d);
+    },
+  };
+  const act = (next: GameState, lock = false) => {
+    setHistory((h) => [...h, { s, lockBase, placements }]);
+    setS(next);
+    if (lock) {
+      setLockBase(next);
+      setPlacements([]);
+    }
+  };
+  const undoStep = () => {
+    const last = history.at(-1);
+    if (!last) return;
+    snap();
+    setHistory((h) => h.slice(0, -1));
+    setS(last.s);
+    setLockBase(last.lockBase);
+    setPlacements(last.placements);
+    setSel(null);
+  };
+
+  // The footer is fixed over the page; pad the page by its real height so the whole board can be scrolled into view.
+  const footerRef = useRef<HTMLElement>(null);
+  const [footerH, setFooterH] = useState(224);
+  useLayoutEffect(() => {
+    const el = footerRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => setFooterH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const placedIds = new Set(placements.filter((p) => p.cell[0] >= 0).map((p) => p.dieId));
   const movable = (dieId: number) => s.phase === "place" && placedIds.has(dieId);
@@ -837,6 +957,17 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
   const res = s.phase === "resolve" ? resolvables(s) : [];
   const activeRooms = new Set(res.map((r) => r.key));
+  /** Whether "Use" would do anything for this option right now (enough energy, high enough value). */
+  const usableNow = (x: (typeof res)[number]) => {
+    if (x.dieId !== undefined) {
+      const d = s.dice.find((dd) => dd.id === x.dieId)!;
+      return d.value >= routeIndex(s, d.cell!) - s.excavator && s.energy >= 1;
+    }
+    const r = x.room!;
+    return roomContents(s, r).full && s.energy >= r.cost && roomValue(s, r) > 0;
+  };
+  // Nothing left that can be used (e.g. every room needs energy you don't have, and no generator can add any): ending the round is the only move.
+  const nothingUsable = res.every((x) => !usableNow(x));
 
   const selectable = (cell: Cell) => {
     if (s.phase === "place") return sel !== null && legal(sel, cell);
@@ -882,7 +1013,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
   };
 
   const onCell = (cell: Cell) => {
-    if (s.phase === "placeRobot") return setS(placeRobot(s, cell));
+    if (s.phase === "placeRobot") return act(placeRobot(s, cell));
     if (sel === null || !legal(sel, cell)) return;
     commitDie(sel, cell);
   };
@@ -951,8 +1082,9 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col overflow-x-hidden">
-      <main className="flex flex-1 flex-col gap-2 px-2 pb-56 pt-2">
-        <Sky s={s} from={selBase} preview={preview} focusCol={focusCol} onNew={onNew} />
+      <DamageFlash damage={s.damage} />
+      <main className="flex flex-1 flex-col gap-2 px-2 pt-[max(env(safe-area-inset-top),0.5rem)]" style={{ paddingBottom: footerH + 8 }}>
+        <Sky s={s} from={selBase} preview={preview} focusCol={focusCol} menu={menu} />
         <Base
           s={s}
           exc={exc}
@@ -975,10 +1107,10 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
         </div>
       )}
 
-      <footer className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-border bg-background/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 backdrop-blur">
+      <footer ref={footerRef} className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-border bg-background/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 backdrop-blur">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <HullTrack damage={s.damage} />
-          <span className="min-w-0 flex-1 text-[10px] uppercase text-muted-foreground">
+          <EnergyTrack s={s} />
+          <span className="min-w-0 flex-1 text-center text-[10px] uppercase text-muted-foreground">
             {s.phase === "place" &&
               (selPlaced
                     ? "Move this die, or drag it to the tray"
@@ -991,8 +1123,13 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
           </span>
           <div className="flex shrink-0 gap-1.5">
             <RulesSheet />
-            {s.phase === "place" && (
-              <button type="button" onClick={undo} disabled={!placements.length} className="flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs disabled:opacity-30">
+            {(s.phase === "place" || s.phase === "resolve" || s.phase === "placeRobot") && (
+              <button
+                type="button"
+                onClick={s.phase === "place" ? undo : undoStep}
+                disabled={s.phase === "place" ? !placements.length : !history.length}
+                className="flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs disabled:opacity-30"
+              >
                 <Undo2 className="size-3.5" /> Undo
               </button>
             )}
@@ -1003,7 +1140,7 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
           <>
             <div className="flex min-h-14 items-center justify-center gap-3" role={unplaced.length ? "radiogroup" : undefined} aria-label="Dice tray" data-tray>
               {unplaced.length === 0 && (
-                <ActionBtn tone="primary" onClick={() => { fresh(startResolve(s)); setSel(null); }}>
+                <ActionBtn tone="primary" onClick={() => { act(startResolve(s), true); setSel(null); }}>
                   End dice phase · Resolve rooms
                 </ActionBtn>
               )}
@@ -1060,34 +1197,33 @@ function GameView({ initial, onNew }: { initial: GameState; onNew: (d: Difficult
 
         {s.phase === "resolve" && (
           <div className="space-y-1.5">
-            <div className="max-h-36 space-y-1 overflow-y-auto">
+            <div className="space-y-1">
               {res.length === 0 && <p className="text-xs text-muted-foreground">Nothing left to resolve.</p>}
               {res.map((x) => {
                 if (x.dieId !== undefined) {
                   const d = s.dice.find((dd) => dd.id === x.dieId)!;
                   const dist = routeIndex(s, d.cell!) - s.excavator;
                   return (
-                    <ResolveRow key={x.key} icon={<Pickaxe className="size-4" />} title={`Dig ${dist} · die ${d.value}`} cost={1} ok={d.value >= dist && s.energy >= 1}
-                      onUse={() => setS(resolveDig(s, d.id, true))} onSkip={() => setS(resolveDig(s, d.id, false))} />
+                    <ResolveRow key={x.key} icon={<Pickaxe className="size-4" />} title={`Dig ${dist} · die ${d.value}`} cost={1} ok={usableNow(x)}
+                      onUse={() => act(resolveDig(s, d.id, true))} onSkip={() => act(resolveDig(s, d.id, false))} />
                   );
                 }
                 const r = x.room!;
-                const c = roomContents(s, r);
                 const v = roomValue(s, r);
                 return (
                   <ResolveRow key={x.key} icon={<RoomIcons r={r} />}
-                    title={`${roomLabel(r)} · value ${v}${c.full ? "" : " (incomplete)"}`} cost={r.cost} ok={c.full && s.energy >= r.cost && v > 0}
-                    onUse={() => setS(resolveRoom(s, r.id, true))} onSkip={() => setS(skipRobots(s, r.id))} />
+                    title={`${roomLabel(r)} · value ${v}`} cost={r.cost} ok={usableNow(x)}
+                    onUse={() => act(resolveRoom(s, r.id, true))} onSkip={() => act(skipRobots(s, r.id))} />
                 );
               })}
             </div>
-            <ActionBtn tone={res.length ? "muted" : "primary"} onClick={() => { fresh(endRound(s)); setSel(null); }}>
+            <ActionBtn tone={nothingUsable ? "primary" : "muted"} onClick={() => { fresh(endRound(s)); setSel(null); }}>
               End round · Mothership descends
             </ActionBtn>
           </div>
         )}
 
-        {s.phase === "placeRobot" && <ActionBtn tone="muted" onClick={() => setS(placeRobot(s, null))}>Discard robot</ActionBtn>}
+        {s.phase === "placeRobot" && <ActionBtn tone="muted" onClick={() => act(placeRobot(s, null))}>Discard robot</ActionBtn>}
 
         {(s.phase === "won" || s.phase === "lost") && (
           <div className="space-y-2 text-center">
@@ -1107,7 +1243,7 @@ function ActionBtn({ tone, children, ...p }: { tone: "primary" | "warn" | "muted
       type="button"
       {...p}
       className={cn(
-        "flex h-11 flex-1 items-center justify-center gap-2 rounded-sm border font-display text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-40",
+        "flex h-11 w-full flex-1 items-center justify-center gap-2 rounded-sm border font-display text-xs font-bold uppercase tracking-wide transition-all disabled:opacity-40",
         tone === "primary" && "border-research bg-research/15 text-research box-glow",
         tone === "warn" && "animate-pulse border-warn bg-warn/20 text-warn box-glow",
         tone === "muted" && "border-border text-muted-foreground",

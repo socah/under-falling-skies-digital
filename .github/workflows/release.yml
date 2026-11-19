@@ -93,6 +93,11 @@ jobs:
         run: |
           bun tauri android init --ci --skip-targets-install
           bun tauri icon app-icon.png
+          # Use our MainActivity (handles the status bar / notch insets), keeping the generated package name.
+          f=$(find src-tauri/gen/android/app/src/main -name MainActivity.kt)
+          echo "--- generated $f:"; cat "$f"
+          pkg=$(sed -n 's/^package //p' "$f")
+          sed "s/^package .*/package $pkg/" src-tauri/android/MainActivity.kt > "$f"
 
       - name: Configure release signing
         env:

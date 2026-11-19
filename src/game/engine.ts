@@ -15,6 +15,8 @@ export interface Ship {
   col: number;
   pos: number | null; // null = waiting on mothership card; M-1 = starting spot
   destroyed?: boolean;
+  /** Why the ship last left the sky, so the UI can animate it: shot down, crashed into the base, or taken back by the descending mothership. */
+  exit?: "shot" | "crash" | "recalled";
 }
 export interface Robot {
   id: number;
@@ -126,8 +128,10 @@ function advanceMothership(s: GameState) {
   const old = s.mothership;
   s.mothership = old + 1;
   for (const sh of s.ships) {
-    if (sh.pos === old) sh.pos = null;
-    else if (sh.pos === old - 1) sh.pos = old;
+    if (sh.pos === old) {
+      sh.pos = null;
+      sh.exit = "recalled";
+    } else if (sh.pos === old - 1) sh.pos = old;
   }
   s.log.push(`Mothership descends to row ${s.mothership}.`);
   if (s.mothership > board(s).skullRow) lose(s, "The mothership reached the skull.");
@@ -155,6 +159,7 @@ export function moveColumn(s: GameState, col: number, n: number) {
     const target = sh.pos + n;
     if (target >= DAMAGE_ROW) {
       sh.pos = null;
+      sh.exit = "crash";
       takeDamage(s);
       continue;
     }
@@ -210,6 +215,14 @@ export function startResolve(prev: GameState): GameState {
   const s = clone(prev);
   if (s.phase !== "place" || s.dice.some((d) => !d.cell)) return s;
   s.phase = "resolve";
+  // Rooms that aren't completely filled have no effect: skip them right away.
+  for (const r of board(s).rooms) {
+    if (r.parts[0] === "dig" || !roomUsable(s, r)) continue;
+    const c = roomContents(s, r);
+    if (c.full || !c.dice.length) continue;
+    for (const d of c.dice) d.resolved = true;
+    s.log.push(`${r.id}: not every space filled — skipped.`);
+  }
   s.log.push("Resolve your rooms in any order.");
   return s;
 }
@@ -252,6 +265,7 @@ export function shootDown(s: GameState, value: number) {
     const icon = sky[sh.pos]![sh.col];
     if (icon?.t === "exp" && icon.v <= value) {
       sh.pos = null;
+      sh.exit = "shot";
       if (sh.color === "red") sh.destroyed = true;
       n++;
     }
@@ -264,7 +278,8 @@ export function resolvables(s: GameState) {
   for (const r of board(s).rooms) {
     if (r.parts[0] === "dig" || !roomUsable(s, r)) continue;
     const c = roomContents(s, r);
-    if (c.dice.length + c.robots.length > 0) out.push({ key: r.id, room: r });
+    // Incomplete rooms can't do anything, so they're never offered.
+    if (c.full && c.dice.length + c.robots.length > 0) out.push({ key: r.id, room: r });
   }
   for (const d of s.dice) if (d.cell && d.cell[0] >= 0 && !d.resolved && isDigPlacement(s, d.cell)) out.push({ key: `dig${d.id}`, dieId: d.id });
   return out;

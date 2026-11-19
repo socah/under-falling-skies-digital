@@ -74,6 +74,7 @@ src-tauri/
 ├── src/lib.rs           # Tauri entry point
 ├── capabilities/        # Which native APIs the page may call (only the defaults)
 ├── icons/               # Generated from app-icon.png by `bun tauri icon app-icon.png`
+├── android/MainActivity.kt              # Replaces the generated activity in CI: keeps the game clear of the status bar/notch
 └── android-signing.gradle.kts.snippet   # Release signing, added to the Android project in CI
 ```
 
