@@ -7,6 +7,8 @@ import {
   isExcavated,
   roomUsable,
   canPlaceRobot,
+  placeRobot,
+  robotTarget,
   replay,
   endRound,
   newGame,
@@ -250,5 +252,36 @@ describe("room resolution", () => {
     const r = startResolve({ ...s, dice: s.dice.map((d) => (d.cell ? d : { ...d, cell: [-1, -1] as [number, number], resolved: true })) });
     expect(resolvables(r).some((x) => x.key === "R1c")).toBe(true);
     expect(r.dice[0]!.resolved).toBe(false);
+  });
+});
+
+describe("placing a new robot", () => {
+  const building = (): GameState => {
+    let s = placeDie(game(), 0, [3, 2]); // one space of the two-space lab R3c
+    s = { ...s, excavator: 99, phase: "placeRobot", pendingRobotValue: 4 };
+    s.dice = s.dice.map((d) => (d.id === 0 ? { ...d, resolved: true } : d));
+    return s;
+  };
+
+  it("can go where a resolved die sits", () => {
+    const s = building();
+    expect(robotTarget(s, [3, 2])).toEqual([3, 2]);
+    const r = placeRobot(s, [3, 2]);
+    expect(r.robots).toHaveLength(1);
+    expect(r.robots[0]!.cell).toEqual([3, 2]);
+  });
+
+  it("tapping a taken space puts it on a free space in the same room", () => {
+    const s = building();
+    s.robots = [{ id: 1, value: 2, cell: [3, 2], used: false, fresh: false }];
+    const other = board(s).rooms.find((r) => r.id === "R3c")!.cells.find((c) => !(c[0] === 3 && c[1] === 2))!;
+    expect(robotTarget(s, [3, 2])).toEqual(other);
+  });
+
+  it("never on a tunnel space outside the rooms", () => {
+    const s = building();
+    const b = board(s);
+    const tunnel = b.route.find((c) => !b.rooms.some((r) => r.cells.some((x) => x[0] === c[0] && x[1] === c[1])))!;
+    expect(robotTarget(s, tunnel)).toBeNull();
   });
 });

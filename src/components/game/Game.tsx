@@ -9,7 +9,7 @@ import { BASE_ROWS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, CARDS, normalizeSe
 import {
   board,
   canPlace,
-  canPlaceRobot,
+  robotTarget,
   digTargets,
   endRound,
   hasLegalPlacement,
@@ -516,13 +516,13 @@ const Base = memo(function Base({
           const ok = selectable.has(key(cell));
           const canMove = die && movable.has(die.id);
           return (
-            <div key={key(cell)} className="absolute z-20 p-1.5" style={cellBox(cell)}>
+            // The click handler is on the outer box so the gap around a space counts as a tap on it too.
+            <div key={key(cell)} className={cn("absolute z-20 p-1.5", ok && "cursor-pointer")} style={cellBox(cell)} onClick={() => ok && onCell(cell)}>
               <div
                 role="button"
                 tabIndex={ok ? 0 : -1}
                 aria-disabled={!ok}
                 data-cell={key(cell)}
-                onClick={() => ok && onCell(cell)}
                 onPointerEnter={() => ok && onHover(cell)}
                 onPointerLeave={() => onHover(null)}
                 aria-label={`Space row ${cell[0] + 1} column ${cell[1] + 1}`}
@@ -532,9 +532,10 @@ const Base = memo(function Base({
                   ok && "cursor-pointer bg-energy/10 ring-2 ring-inset ring-energy/70 hover:bg-energy/25",
                 )}
               >
-                {die && die.cell![0] >= 0 && (
+                {/* A robot built on a space replaces the used die that sat there. */}
+                {die && die.cell![0] >= 0 && !robot && (
                   <span
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={canMove ? (e) => e.stopPropagation() : undefined}
                     onPointerDown={canMove ? (e) => onDieDown(die.id, e) : undefined}
                     data-die={die.id}
                     className={cn("relative", canMove && "cursor-grab touch-none", draggingId === die.id && "opacity-30")}
@@ -995,7 +996,7 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
   const selectable = useMemo(() => {
     const ok = (cell: Cell) => {
       if (s.phase === "place") return sel !== null && legal(sel, cell);
-      if (s.phase === "placeRobot") return canPlaceRobot(s, cell);
+      if (s.phase === "placeRobot") return robotTarget(s, cell) !== null; // any space of a room with room for it
       return false;
     };
     const b = board(s);
@@ -1041,7 +1042,7 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
   };
 
   const onCell = (cell: Cell) => {
-    if (s.phase === "placeRobot") return act(placeRobot(s, cell));
+    if (s.phase === "placeRobot") return act(placeRobot(s, robotTarget(s, cell)));
     if (sel === null || !legal(sel, cell)) return;
     commitDie(sel, cell);
   };

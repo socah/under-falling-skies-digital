@@ -366,6 +366,12 @@ export function canPlaceRobot(s: GameState, cell: Cell) {
   return !!r && roomUsable(s, r) && !s.robots.some((rb) => eq(rb.cell, cell)) && !s.dice.some((d) => d.cell && !d.resolved && eq(d.cell, cell));
 }
 
+/** Where a new robot goes when the player taps `cell`: that space if it's free, otherwise a free space in the same room. */
+export function robotTarget(s: GameState, cell: Cell): Cell | null {
+  if (canPlaceRobot(s, cell)) return cell;
+  return roomAt(s, cell)?.cells.find((c) => canPlaceRobot(s, c)) ?? null;
+}
+
 export function placeRobot(prev: GameState, cell: Cell | null): GameState {
   const s = clone(prev);
   if (cell && canPlaceRobot(s, cell) && s.pendingRobotValue) {
