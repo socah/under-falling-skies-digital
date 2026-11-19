@@ -99,7 +99,7 @@ Releases are built by GitHub Actions ([`.github/workflows/release.yml`](.github/
    ```
 3. The workflow builds the AppImage, the `.deb` and a signed APK, then publishes them as a GitHub release.
 
-To test a build without publishing, start the workflow manually from the **Actions** tab. The files are attached to the run as artifacts.
+To test a build without publishing, start the workflow manually from the **Actions** tab. The files are attached to the run as artifacts. Tick **webview_debug** there to get an APK whose game can be inspected and profiled from desktop Chrome (`chrome://inspect`, phone connected over USB). Tag builds never have this.
 
 The APK is signed with a release key stored in the repo secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`. Every update must be signed with the same key, so keep an offline backup of the keystore.
 

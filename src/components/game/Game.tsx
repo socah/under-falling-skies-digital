@@ -2,7 +2,7 @@ import pxEnergy from "@/assets/pano-energy.jpg";
 import pxRobot from "@/assets/pano-robot.jpg";
 import pxFighter from "@/assets/pano-fighter.jpg";
 import pxResearch from "@/assets/pano-research.jpg";
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import { BookOpen, Bot, ChevronsDown, Dices, Flag, FlaskConical, Lock, Menu, Pickaxe, Plane, Shield, Skull, Trash2, TriangleAlert, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { BASE_ROWS, COLS, DAMAGE_ROW, MAX_DAMAGE, MAX_ENERGY, CARDS, normalizeSetup, setupLevel, type Difficulty, type MsEffect, type Room, type RoomPart } from "@/game/data";
@@ -345,7 +345,8 @@ const cellBox = (c: Cell, rows = 1, cols = 1) => ({
   height: rows * CELL_H,
 });
 
-function Base({
+/** Memoised: while dragging, only the hovered space changes, and the base doesn't depend on it (the sky's preview does). */
+const Base = memo(function Base({
   s,
   exc,
   digging,
@@ -362,13 +363,13 @@ function Base({
   s: GameState;
   exc: number;
   digging: boolean;
-  selectable: (c: Cell) => boolean;
+  selectable: Set<string>; // keys of the spaces that can be picked now
   dimmed: boolean;
   reach: number | null; // furthest route index the selected die can dig to
   onCell: (c: Cell) => void;
   onHover: (c: Cell | null) => void;
   activeRooms: Set<string>;
-  movable: (dieId: number) => boolean;
+  movable: Set<number>; // dice that can be picked up again
   onDieDown: (dieId: number, e: RPointerEvent) => void;
   draggingId: number | null;
 }) {
@@ -487,9 +488,11 @@ function Base({
             const a = center(previous);
             const z = center(c);
             const reachable = reach !== null && i > exc && i <= reach;
+            // Reachable path: a wide faint line under a bright one gives the glow without a per-frame-repainting filter.
             return (
+              <g key={i}>
+              {reachable && <line x1={a.x} y1={a.y} x2={z.x} y2={z.y} strokeLinecap="round" strokeWidth={9} className="stroke-energy opacity-30" />}
               <line
-                key={i}
                 x1={a.x}
                 y1={a.y}
                 x2={z.x}
@@ -498,11 +501,11 @@ function Base({
                 strokeWidth={reachable ? 4 : 2}
                 className={cn(
                   "transition-all duration-300",
-                  reachable ? "animate-route stroke-energy" : "stroke-muted-foreground/25",
+                  reachable ? "stroke-energy" : "stroke-muted-foreground/25",
                   reach !== null && !reachable && "opacity-25",
                 )}
-                style={{ filter: reachable ? "drop-shadow(0 0 3px var(--energy))" : undefined }}
               />
+              </g>
             );
           })}
         </svg>
@@ -510,8 +513,8 @@ function Base({
         {slots.map((cell) => {
           const die = s.dice.find((d) => same(d.cell, cell));
           const robot = s.robots.find((r) => same(r.cell, cell));
-          const ok = selectable(cell);
-          const canMove = die && movable(die.id);
+          const ok = selectable.has(key(cell));
+          const canMove = die && movable.has(die.id);
           return (
             <div key={key(cell)} className="absolute z-20 p-1.5" style={cellBox(cell)}>
               <div
@@ -559,7 +562,7 @@ function Base({
       </div>
     </section>
   );
-}
+});
 
 /* ---------- header & menus ---------- */
 /** Round and menu tucked into the free rows of the mothership-effect column. */
@@ -936,7 +939,10 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
   }, []);
 
   const placedIds = new Set(placements.filter((p) => p.cell[0] >= 0).map((p) => p.dieId));
-  const movable = (dieId: number) => s.phase === "place" && placedIds.has(dieId);
+  const movable = useMemo(
+    () => new Set(s.phase === "place" ? placements.filter((p) => p.cell[0] >= 0).map((p) => p.dieId) : []),
+    [s.phase, placements],
+  );
 
   /** State to evaluate a die against: without it (if it's being moved) and before any trailing dark die. */
   const ctx = (dieId: number) => {
@@ -973,7 +979,7 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
   const reach = s.phase === "place" && sel !== null ? (dig.length ? Math.max(...dig.map((c) => routeIndex(s, c))) : s.excavator) : null;
 
   const res = s.phase === "resolve" ? resolvables(s) : [];
-  const activeRooms = new Set(res.map((r) => r.key));
+  const activeRooms = useMemo(() => new Set(res.map((r) => r.key)), [res.map((r) => r.key).join()]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Whether "Use" would do anything for this option right now (enough energy, high enough value). */
   const usableNow = (x: (typeof res)[number]) => {
     if (x.dieId !== undefined) {
@@ -986,11 +992,16 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
   // Nothing left that can be used (e.g. every room needs energy you don't have, and no generator can add any): ending the round is the only move.
   const nothingUsable = res.every((x) => !usableNow(x));
 
-  const selectable = (cell: Cell) => {
-    if (s.phase === "place") return sel !== null && legal(sel, cell);
-    if (s.phase === "placeRobot") return canPlaceRobot(s, cell);
-    return false;
-  };
+  const selectable = useMemo(() => {
+    const ok = (cell: Cell) => {
+      if (s.phase === "place") return sel !== null && legal(sel, cell);
+      if (s.phase === "placeRobot") return canPlaceRobot(s, cell);
+      return false;
+    };
+    const b = board(s);
+    return new Set([...b.rooms.flatMap((r) => r.cells), ...b.route].filter(ok).map(key));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s, sel, selCtx]);
 
   const commitDie = (dieId: number, cell: Cell, at?: { x: number; y: number }) => {
     snap(dieId, at);
@@ -1047,8 +1058,7 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
   };
 
   // ---- drag & drop ----
-  const latest = useRef({ legal, commitDie, returnDie });
-  latest.current = { legal, commitDie, returnDie };
+  const latest = useRef({ legal, commitDie, returnDie, onCell, startDrag: (_d: number, _e: RPointerEvent) => {} });
   const startDrag = (dieId: number, e: RPointerEvent) => {
     if (s.phase !== "place" || s.needsReroll && !placedIds.has(dieId)) return;
     e.preventDefault();
@@ -1107,6 +1117,10 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
   };
+  latest.current = { legal, commitDie, returnDie, onCell, startDrag };
+  // Stable identities so the memoised Base isn't re-rendered just because these were recreated.
+  const onCellStable = useCallback((c: Cell) => latest.current.onCell(c), []);
+  const onDieDownStable = useCallback((d: number, e: RPointerEvent) => latest.current.startDrag(d, e), []);
 
   const unplaced = s.dice.filter((d) => !d.cell);
   const selDie = s.dice.find((d) => d.id === sel);
@@ -1127,11 +1141,11 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
           selectable={selectable}
           dimmed={false}
           reach={reach}
-          onCell={onCell}
+          onCell={onCellStable}
           onHover={setHover}
           activeRooms={activeRooms}
           movable={movable}
-          onDieDown={startDrag}
+          onDieDown={onDieDownStable}
           draggingId={drag?.dieId ?? null}
         />
       </main>
@@ -1146,7 +1160,7 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
         </div>
       )}
 
-      <footer ref={footerRef} className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-border bg-background/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 backdrop-blur">
+      <footer ref={footerRef} className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t border-border bg-background px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2">
         <div className="mb-2 flex items-center justify-between gap-2">
           <EnergyTrack s={s} />
           <span className="min-w-0 flex-1 text-center text-[10px] uppercase text-muted-foreground">

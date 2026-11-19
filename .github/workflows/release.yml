@@ -6,6 +6,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      webview_debug:
+        description: "Android: allow inspecting the game in desktop Chrome (chrome://inspect) for profiling. Test builds only."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -98,6 +103,13 @@ jobs:
           echo "--- generated $f:"; cat "$f"
           pkg=$(sed -n 's/^package //p' "$f")
           sed "s/^package .*/package $pkg/" src-tauri/android/MainActivity.kt > "$f"
+
+      - name: Enable web view debugging (test build)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.webview_debug }}
+        run: |
+          f=$(find src-tauri/gen/android/app/src/main -name MainActivity.kt)
+          sed -i 's/^\(\s*\)super.onCreate(savedInstanceState)$/&\n\1android.webkit.WebView.setWebContentsDebuggingEnabled(true)/' "$f"
+          grep -n "setWebContentsDebuggingEnabled" "$f"
 
       - name: Configure release signing
         env:
