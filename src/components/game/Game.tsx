@@ -230,6 +230,17 @@ function Sky({ s, from, preview, focusCol, menu }: { s: GameState; from: GameSta
       })
     : [];
   const shipStyle = (pos: number, col: number) => ({ top: (pos + 1) * ROW_H, height: ROW_H, left: `calc(${col * 20}% + 10% - 12px)` });
+  // A ship pushed sideways by an arrow moves down to the arrow first, then sideways (reversed when undoing),
+  // instead of sliding diagonally. The timing is remembered per ship until it moves again, so re-renders don't change it.
+  const moves = useRef(new Map<number, { pos: number; col: number; t: string }>());
+  const shipTransition = (id: number, pos: number, col: number) => {
+    const m = moves.current.get(id);
+    if (m && m.pos === pos && m.col === col) return m.t;
+    let tr = "top 500ms ease-out, left 500ms ease-out";
+    if (m && m.col !== col) tr = pos >= m.pos ? "top 400ms ease-out, left 300ms ease-in-out 400ms" : "left 300ms ease-in-out, top 400ms ease-out 300ms";
+    moves.current.set(id, { pos, col, t: tr });
+    return tr;
+  };
   return (
     <section
       className={cn("relative grid grid-cols-[2.5rem_minmax(0,1fr)] rounded-md border border-border bg-cover bg-center", look === "abstract" && "sky-gradient")}
@@ -278,14 +289,14 @@ function Sky({ s, from, preview, focusCol, menu }: { s: GameState; from: GameSta
           if (sh.pos === null) return null;
           const ic = b.sky[sh.pos]?.[sh.col];
           return ic?.t === "exp" ? (
-            <span key={`t${sh.id}`} aria-label={`Shooting threshold ${ic.v}`} className="absolute z-30 -translate-y-1/2 rounded-sm border border-background bg-warn px-0.5 text-[10px] font-bold leading-tight text-background transition-all duration-500" style={{ top: (sh.pos + 1.5) * ROW_H, left: `calc(${sh.col * 20}% + 10% + 10px)` }}>
+            <span key={`t${sh.id}`} aria-label={`Shooting threshold ${ic.v}`} className="absolute z-30 -translate-y-1/2 rounded-sm border border-background bg-warn px-0.5 text-[10px] font-bold leading-tight text-background" style={{ top: (sh.pos + 1.5) * ROW_H, left: `calc(${sh.col * 20}% + 10% + 10px)`, transition: shipTransition(sh.id, sh.pos, sh.col) }}>
               {ic.v}+
             </span>
           ) : null;
         })}
         {s.ships.map((sh) =>
           sh.pos === null ? null : (
-            <div key={sh.id} data-ship-row={sh.pos} className="absolute z-20 flex items-center transition-all duration-500 ease-out" style={shipStyle(sh.pos, sh.col)}>
+            <div key={sh.id} data-ship-row={sh.pos} className="absolute z-20 flex items-center" style={{ ...shipStyle(sh.pos, sh.col), transition: shipTransition(sh.id, sh.pos, sh.col) }}>
               <EnemyShip red={sh.color === "red"} />
             </div>
           ),
@@ -555,7 +566,6 @@ function Base({
 function SideStats({ s, menu, free }: { s: GameState; menu: MenuActions; free: number[] }) {
   const items: ReactNode[] = [
     <GameMenu key="m" s={s} menu={menu} />,
-    <span key="r" className="text-[9px] text-muted-foreground" title={`Level ${setupLevel(s.difficulty)}`}>R{s.round}</span>,
   ];
   let k = 0;
   return (
@@ -837,7 +847,9 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
   const [placements, setPlacements] = useState<Placement[]>(initial.placements);
   const [sel, setSel] = useState<number | null>(null);
   const [hover, setHover] = useState<Cell | null>(null);
+  // Where a drag started; the floating die is then moved directly via `ghostRef`, without re-rendering the game.
   const [drag, setDrag] = useState<{ dieId: number; x: number; y: number } | null>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
   const [exc, setExc] = useState(initial.s.excavator);
 
   // walk the excavator token one space at a time
@@ -938,12 +950,17 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
     }
     return { base: replay(lockBase, pre), pre, post };
   };
+  // Replaying placements is the expensive part: do it once for the selected die, not for every board space.
+  const selCtx = useMemo(
+    () => (sel !== null ? ctx(sel) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sel, s, lockBase, placements],
+  );
   const legal = (dieId: number, cell: Cell) => {
-    const b = ctx(dieId).base;
+    const b = dieId === sel && selCtx ? selCtx.base : ctx(dieId).base;
     return !!b && !canPlace(b, dieId, cell);
   };
 
-  const selCtx = sel !== null ? ctx(sel) : null;
   const selBase = selCtx?.base ?? s;
   const previewCell = hover;
   const preview = useMemo(() => {
@@ -1041,21 +1058,39 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
     const y0 = e.clientY;
     let moved = false;
     let target: Cell | null = null;
+    let targetKey = "";
     let overTray = false;
     let at = { x: x0, y: y0 };
-    const move = (ev: PointerEvent) => {
-      if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
-      moved = true;
-      at = { x: ev.clientX, y: ev.clientY };
-      setDrag({ dieId, x: ev.clientX, y: ev.clientY });
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    let frame = 0;
+    // At most once per screen frame: move the floating die and work out which space is under the finger.
+    const update = () => {
+      frame = 0;
+      ghostRef.current?.style.setProperty("transform", `translate3d(${at.x - x0}px, ${at.y - y0}px, 0)`);
+      const el = document.elementFromPoint(at.x, at.y);
       const cellEl = el?.closest("[data-cell]") as HTMLElement | null;
       overTray = !!el?.closest("[data-tray]");
       const c = cellEl ? (cellEl.dataset["cell"]!.split(",").map(Number) as Cell) : null;
-      target = c && latest.current.legal(dieId, c) ? c : null;
-      setHover(target);
+      const next = c && latest.current.legal(dieId, c) ? c : null;
+      const k = next ? key(next) : "";
+      if (k !== targetKey) {
+        // Only re-render (highlight + ship preview) when the target space actually changes.
+        targetKey = k;
+        target = next;
+        setHover(next);
+      }
+    };
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+      if (!moved) setDrag({ dieId, x: x0, y: y0 });
+      moved = true;
+      at = { x: ev.clientX, y: ev.clientY };
+      if (!frame) frame = requestAnimationFrame(update);
     };
     const up = () => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+        if (moved) update();
+      }
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
@@ -1102,8 +1137,12 @@ function GameView({ initial, onNew }: { initial: SavedGame; onNew: (d: Difficult
       </main>
 
       {dragDie && (
-        <div className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-1/2 scale-110 drop-shadow-xl" style={{ left: drag.x, top: drag.y }}>
-          <DieFace value={dragDie.value} color={dragDie.color} />
+        // Outer element only follows the finger; the inner one is centred and enlarged. (On one element the
+        // scale would also apply to the movement, making the die drift away from the finger.)
+        <div ref={ghostRef} className="pointer-events-none fixed z-50 will-change-transform" style={{ left: drag.x, top: drag.y }}>
+          <div className="-translate-x-1/2 -translate-y-1/2 scale-110 drop-shadow-xl">
+            <DieFace value={dragDie.value} color={dragDie.color} />
+          </div>
         </div>
       )}
 
